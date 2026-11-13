@@ -1,0 +1,6 @@
+# Listas M3U que o testa_canais.sh baixa e testa. Um endereco por linha.
+# Linhas com # na frente sao ignoradas (use para desligar uma lista sem apagar).
+# Canais adicionados a mao ficam em ~/iptv/extras.m3u (entram sempre primeiro).
+https://iptv-org.github.io/iptv/countries/br.m3u
+https://iptv-org.github.io/iptv/languages/por.m3u
+https://raw.githubusercontent.com/Free-TV/IPTV/master/playlists/playlist_brazil.m3u8

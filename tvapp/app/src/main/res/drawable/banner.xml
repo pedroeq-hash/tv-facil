@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- shortcut: banner provisorio (tela de TV amarela); trocar pela arte final antes do release. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#0E1116" android:pathData="M0,0h320v180h-320z" />
+    <path android:fillColor="#FFC94D" android:pathData="M100,40h120a10,10 0,0 1,10 10v70a10,10 0,0 1,-10 10h-120a10,10 0,0 1,-10 -10v-70a10,10 0,0 1,10 -10z" />
+    <path android:fillColor="#0E1116" android:pathData="M145,65l35,20l-35,20z" />
+    <path android:fillColor="#FFC94D" android:pathData="M130,140h60v8h-60z" />
+</vector>

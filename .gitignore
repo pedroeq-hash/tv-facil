@@ -1,0 +1,22 @@
+# Dados do aparelho (backup, logs, APKs): nunca no repositorio publico
+/stick/
+# Dados desta maquina/rede (IP do stick etc.)
+CLAUDE.local.md
+
+# Build Android/Gradle
+build/
+.gradle/
+.kotlin/
+local.properties
+*.apk
+*.aab
+
+# Chaves de assinatura e segredos
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
