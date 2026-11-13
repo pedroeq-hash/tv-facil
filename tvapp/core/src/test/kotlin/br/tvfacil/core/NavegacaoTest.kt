@@ -2,6 +2,7 @@ package br.tvfacil.core
 
 import br.tvfacil.core.Camada.ASSISTINDO
 import br.tvfacil.core.Camada.BUSCA
+import br.tvfacil.core.Camada.GRADE
 import br.tvfacil.core.Camada.LISTA
 import br.tvfacil.core.Camada.MENU
 import kotlin.test.Test
@@ -56,5 +57,13 @@ class NavegacaoTest {
         assertEquals(Reacao(MENU), Navegacao.reagir(BUSCA, Tecla.MENU))
         assertNull(Navegacao.reagir(BUSCA, Tecla.OK))
         assertNull(Navegacao.reagir(BUSCA, Tecla.CANAL_MAIS))
+    }
+
+    @Test
+    fun `grade - Voltar volta a assistir, menu abre o menu, OK e CH ficam com o cartao`() {
+        assertEquals(Reacao(ASSISTINDO), Navegacao.reagir(GRADE, Tecla.VOLTAR))
+        assertEquals(Reacao(MENU), Navegacao.reagir(GRADE, Tecla.MENU))
+        assertNull(Navegacao.reagir(GRADE, Tecla.OK))
+        assertNull(Navegacao.reagir(GRADE, Tecla.CANAL_MAIS))
     }
 }

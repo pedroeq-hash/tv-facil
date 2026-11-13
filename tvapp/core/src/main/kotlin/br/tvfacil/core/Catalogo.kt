@@ -7,6 +7,17 @@ object Catalogo {
 
     fun grupoDe(canal: Canal) = canal.grupo.ifBlank { "Outros" }
 
+    /** Duas letras no cartão da grade, no lugar do logo: "Record News (720p)" → "RN", "SBT" → "SB". */
+    fun sigla(nome: String): String {
+        val palavras = nome.replace(Regex("""\(.*?\)|\[.*?]"""), " ")
+            .split(Regex("""[^\p{L}\p{N}]+""")).filter { it.isNotEmpty() }
+        return when (palavras.size) {
+            0 -> "TV"
+            1 -> palavras[0].take(2)
+            else -> "${palavras[0][0]}${palavras[1][0]}"
+        }.uppercase()
+    }
+
     /** Favoritos primeiro (se houver); depois os grupos na ordem da lista (a ordem vem do testa_canais.sh). */
     fun grupos(canais: List<Canal>, favoritos: Set<String>): List<Grupo> {
         val resto = canais.groupBy(::grupoDe).map { (nome, cs) -> Grupo(nome, cs) }

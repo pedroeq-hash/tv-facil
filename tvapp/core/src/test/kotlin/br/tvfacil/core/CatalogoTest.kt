@@ -29,4 +29,30 @@ class CatalogoTest {
     fun `canal sem grupo vai para Outros`() {
         assertEquals("Outros", Catalogo.grupos(listOf(canal("X", "")), emptySet()).single().nome)
     }
+
+    @Test
+    fun `sigla - iniciais das duas primeiras palavras`() {
+        assertEquals("RN", Catalogo.sigla("Record News"))
+        assertEquals("JP", Catalogo.sigla("Jovem Pan News"))
+        assertEquals("TC", Catalogo.sigla("TV Câmara"))
+    }
+
+    @Test
+    fun `sigla - uma palavra vira as duas primeiras letras`() {
+        assertEquals("SB", Catalogo.sigla("SBT"))
+        assertEquals("GL", Catalogo.sigla("globoplay"))
+    }
+
+    @Test
+    fun `sigla - ignora qualidade entre parenteses ou colchetes e simbolos`() {
+        assertEquals("XS", Catalogo.sigla("XITE Siempre Latino (1080p)"))
+        assertEquals("CB", Catalogo.sigla("Canal Brasil [Geo-blocked]"))
+        assertEquals("T3", Catalogo.sigla("TV - 3"))
+    }
+
+    @Test
+    fun `sigla - nome vazio ou so simbolos vira TV`() {
+        assertEquals("TV", Catalogo.sigla(""))
+        assertEquals("TV", Catalogo.sigla("--- (720p)"))
+    }
 }

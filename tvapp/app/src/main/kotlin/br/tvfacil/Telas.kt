@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
@@ -81,6 +86,8 @@ private val CINZA = Color(0xFFC3C9D1)
 private val PAINEL = Color(0xF20E1116)
 private val CARTAO = Color(0xFF1A1F27)
 private val BORDA = Color(0xFF3A424E)
+private val LATERAL = Color(0xFF141920)
+private val SELO = Color(0xFF2A313C)
 val ATKINSON = FontFamily(Font(R.font.atkinson_regular), Font(R.font.atkinson_bold, FontWeight.Bold))
 
 private const val BARRA_MS = 6_000L
@@ -154,6 +161,7 @@ fun Tela(
             }
             Camada.LISTA -> ListaCanais(grupos, grupoAtual, canal, acoes)
             Camada.BUSCA -> BuscaCanais(canais, termo, canal, acoes)
+            Camada.GRADE -> GradeCanais(grupos, grupoAtual, canal, acoes)
             Camada.MENU -> Menu(canal, canal?.url in favoritos, anterior, acoes, Modifier.align(Alignment.CenterEnd))
         }
         if (faixa != null) {
@@ -326,12 +334,114 @@ private fun ItemCanal(canal: Canal, noAr: Boolean, modifier: Modifier, detalhe: 
                 Text(canal.nome, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (detalhe != null) Text(detalhe, fontSize = 13.sp, maxLines = 1)
             }
-            if (noAr) {
-                Text(
-                    "NO AR", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.background(Color(0xFFE5484D), RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
-                )
+            if (noAr) NoAr()
+        }
+    }
+}
+
+@Composable
+private fun NoAr(modifier: Modifier = Modifier) {
+    Text(
+        "NO AR", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        modifier = modifier.background(Color(0xFFE5484D), RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
+    )
+}
+
+// Tela cheia (cobre o video; o som continua): grupos a esquerda, cartoes a direita. OK no cartao assiste e fecha.
+@Composable
+private fun GradeCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, acoes: Acoes) {
+    if (grupos.isEmpty()) return
+    var indice by remember { mutableIntStateOf(grupos.indexOfFirst { it.nome == grupoAtual }.coerceAtLeast(0)) }
+    val grupo = grupos[indice.coerceIn(grupos.indices)]
+    val alvo = grupo.canais.indexOf(atual).coerceAtLeast(0)
+    val rolagem = rememberLazyGridState()
+    val foco = remember { FocusRequester() }
+    val grupoFoco = remember { FocusRequester() }
+    var abriu by remember { mutableStateOf(false) }
+    LaunchedEffect(grupo.nome) {
+        rolagem.scrollToItem(alvo)
+        if (abriu) return@LaunchedEffect
+        abriu = true
+        delay(50) // espera o cartao aparecer na tela para poder receber o foco
+        runCatching { foco.requestFocus() }
+    }
+    Row(Modifier.fillMaxSize().background(FUNDO)) {
+        // Padrao de TV: o grupo que recebe o foco (▲▼ nesta coluna) e o que aparece na grade.
+        Column(
+            Modifier.fillMaxHeight().width(200.dp).background(LATERAL).padding(horizontal = 13.dp, vertical = 24.dp)
+                .focusRestorer(grupoFoco), // vindo da grade com ◀, cai no grupo atual
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("Todos os canais", color = TEXTO, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 11.dp, bottom = 9.dp))
+            grupos.forEachIndexed { i, g ->
+                val escolhido = i == indice
+                Surface(
+                    onClick = { indice = i },
+                    modifier = Modifier.fillMaxWidth().then(if (escolhido) Modifier.focusRequester(grupoFoco) else Modifier)
+                        .onFocusChanged { if (it.isFocused) indice = i },
+                    shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+                    colors = ClickableSurfaceDefaults.colors(
+                        containerColor = if (escolhido) SELO else Color.Transparent,
+                        contentColor = if (escolhido) TEXTO else CINZA,
+                        focusedContainerColor = FOCO,
+                        focusedContentColor = SOBRE_FOCO,
+                    ),
+                    scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+                ) {
+                    Row(Modifier.padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(g.nome, fontSize = 16.sp, fontWeight = if (escolhido) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${g.canais.size}", fontSize = 12.sp)
+                    }
+                }
             }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 27.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            Text(grupo.nome, color = TEXTO, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            LazyVerticalGrid(
+                GridCells.Fixed(4),
+                state = rolagem,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                items(grupo.canais.size) { i ->
+                    val c = grupo.canais[i]
+                    CartaoCanal(c, noAr = c == atual, if (i == alvo) Modifier.focusRequester(foco) else Modifier) { acoes.escolher(c, grupo.nome) }
+                }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Dica("◀ ▶ ▲ ▼", "escolher", 12.sp)
+                Dica("OK", "assistir", 12.sp)
+                Dica("Voltar", "fechar", 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartaoCanal(canal: Canal, noAr: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    var focado by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(100.dp).onFocusChanged { focado = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(11.dp)),
+        colors = ClickableSurfaceDefaults.colors(containerColor = CARTAO, contentColor = TEXTO, focusedContainerColor = SELO, focusedContentColor = TEXTO),
+        border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, FOCO))),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f), // sem aumentar: o stick e fraco
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                Modifier.fillMaxSize().padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+            ) {
+                Box(Modifier.size(43.dp).background(if (focado) FOCO else SELO, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                    Text(Catalogo.sigla(canal.nome), color = if (focado) SOBRE_FOCO else TEXTO, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(canal.nome, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+            if (noAr) NoAr(Modifier.align(Alignment.TopEnd).padding(5.dp))
         }
     }
 }
@@ -351,6 +461,7 @@ private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, acoes: Acoe
         if (canal != null) Text(canal.nome, color = CINZA, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(Modifier.height(8.dp))
         Botao("Buscar canal", Modifier.focusRequester(foco)) { acoes.mostrar(Camada.BUSCA) }
+        Botao("Todos os canais") { acoes.mostrar(Camada.GRADE) }
         if (canal != null) {
             Botao(if (favorito) "Tirar dos favoritos" else "★ Favoritar") { acoes.alternarFavorito() }
         }
