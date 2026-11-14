@@ -90,4 +90,58 @@ class M3uParserTest {
         )
         assertEquals(listOf(Canal(nome = "Canal Bom", url = "https://exemplo.com/bom.m3u8")), canais)
     }
+
+    private fun um(url: String) = M3uParser.parse("#EXTINF:-1,Canal\n$url")
+
+    @Test
+    fun `so aceita enderecos http e https`() {
+        for (url in listOf("file:///sdcard/x.ts", "mms://exemplo.com/a", "rtsp://exemplo.com/a", "javascript:alert(1)", "exemplo.com/a.m3u8")) {
+            assertEquals(emptyList(), um(url), url)
+        }
+        assertEquals(1, um("HTTPS://exemplo.com/a.m3u8").size)
+        assertEquals(1, um("http://exemplo.com/a.m3u8").size)
+    }
+
+    @Test
+    fun `ignora endereco longo demais ou com espaco e controle`() {
+        assertEquals(emptyList(), um("https://exemplo.com/" + "a".repeat(2048)))
+        assertEquals(emptyList(), um("https://exemplo.com/a b.m3u8"))
+        assertEquals(emptyList(), um("https://exemplo.com/a\u0000.m3u8"))
+    }
+
+    @Test
+    fun `tira caracteres invisiveis e de inversao de texto do nome, grupo e opcoes`() {
+        val canal = M3uParser.parse(
+            "#EXTINF:-1 group-title=\"Not​ícias\u0007\",CNN‮ Brasil\u0000\n" +
+                "#EXTVLCOPT:http-user-agent=Mozilla\u0001/5.0\n" +
+                "#EXTVLCOPT:http-referrer=https://exemplo.com/⁦\n" +
+                "https://exemplo.com/cnn.m3u8"
+        ).single()
+        assertEquals("CNN Brasil", canal.nome)
+        assertEquals("Notícias", canal.grupo)
+        assertEquals("Mozilla/5.0", canal.userAgent)
+        assertEquals("https://exemplo.com/", canal.referrer)
+    }
+
+    @Test
+    fun `corta nome, grupo e opcoes compridos demais`() {
+        val canal = M3uParser.parse(
+            "#EXTINF:-1 group-title=\"${"g".repeat(100)}\",${"n".repeat(200)}\n" +
+                "#EXTVLCOPT:http-user-agent=${"u".repeat(1000)}\n" +
+                "#EXTVLCOPT:http-referrer=${"r".repeat(1000)}\n" +
+                "https://exemplo.com/a.m3u8"
+        ).single()
+        assertEquals(80, canal.nome.length)
+        assertEquals(40, canal.grupo.length)
+        assertEquals(256, canal.userAgent.length)
+        assertEquals(256, canal.referrer.length)
+    }
+
+    @Test
+    fun `no maximo 5000 canais por lista`() {
+        val texto = (1..5001).joinToString("\n") { "#EXTINF:-1,C$it\nhttps://exemplo.com/$it.m3u8" }
+        val canais = M3uParser.parse(texto)
+        assertEquals(5000, canais.size)
+        assertEquals("C5000", canais.last().nome)
+    }
 }

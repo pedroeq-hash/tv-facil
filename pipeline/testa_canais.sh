@@ -41,7 +41,10 @@ declare -A visto
 n=0
 cabecalho=""
 for url in "${LISTAS[@]}"; do
-  if ! curl -sSL -m 60 -o "$TMP/lista.m3u" "$url"; then
+  # So http/https (tambem nos redirecionamentos); file:// so para o extras.m3u local
+  proto='=http,https'
+  [ "$url" = "file://$DIR/extras.m3u" ] && proto='=file'
+  if ! curl -sSL -m 60 --proto "$proto" --proto-redir =http,https -o "$TMP/lista.m3u" "$url"; then
     echo "Falhou ao baixar $url"
     continue
   fi
@@ -73,7 +76,7 @@ testa() {
   url=$(tail -n 1 "$arq")
   ua=$(sed -n 's/^#EXTVLCOPT:http-user-agent=//p' "$arq" | head -n 1)
   ref=$(sed -n 's/^#EXTVLCOPT:http-referrer=//p' "$arq" | head -n 1)
-  local args=(-sL -m "$TEMPO" -D "$arq.cab")
+  local args=(-sL -m "$TEMPO" --proto =http,https --proto-redir =http,https -D "$arq.cab")
   [ -n "$ua" ] && args+=(-A "$ua")
   [ -n "$ref" ] && args+=(-e "$ref")
   # head corta a transmissao depois de 4 KB, para nao baixar video a toa

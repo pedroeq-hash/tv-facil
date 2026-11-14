@@ -213,7 +213,11 @@ class MainActivity : ComponentActivity(), Acoes {
     private suspend fun lerLista(): List<Canal> = withContext(Dispatchers.IO) {
         val arquivo = arquivoLista
         listaLidaEm = arquivo.lastModified()
-        runCatching { M3uParser.parse(arquivo.readText()) }.getOrDefault(emptyList())
+        // shortcut: lista acima de 5 MB (a normal tem ~50 KB) nao e lida e aparece "nao encontrada"; avisar melhor se acontecer.
+        runCatching {
+            require(arquivo.length() <= 5_000_000)
+            M3uParser.parse(arquivo.readText())
+        }.getOrDefault(emptyList())
     }.filterNot { it.url in bloqueados }
 
     private fun carregar() {

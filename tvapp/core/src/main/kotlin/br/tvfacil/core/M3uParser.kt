@@ -1,24 +1,42 @@
 package br.tvfacil.core
 
+/** A lista vem de fora (sites publicos, no futuro o note): tudo que entra e filtrado aqui. */
 object M3uParser {
 
     private val etiqueta = Regex("""([\w-]+)="([^"]*)"""")
+
+    // Controle e formato: inclui os invisiveis e os que invertem a direcao do texto (U+202E etc.).
+    private val invisiveis = Regex("""[\p{Cc}\p{Cf}]""")
+
+    // Outros esquemas (file://, mms://, rtsp://...) dao acesso a arquivos do stick ou a modulos do VLC com falhas conhecidas.
+    private val urlAceita = Regex("""^https?://[^\s\p{Cc}\p{Cf}]+$""", RegexOption.IGNORE_CASE)
+
+    private const val MAX_CANAIS = 5000
+    private const val MAX_URL = 2048
+    private const val MAX_NOME = 80
+    private const val MAX_GRUPO = 40
+    private const val MAX_OPCAO = 256
+
+    private fun limpa(texto: String, max: Int) = texto.replace(invisiveis, "").trim().take(max)
+
+    private fun aceita(url: String) = url.length <= MAX_URL && urlAceita.matches(url)
 
     fun parse(texto: String): List<Canal> {
         val canais = mutableListOf<Canal>()
         var atual: Canal? = null
         for (bruta in texto.lines()) {
+            if (canais.size >= MAX_CANAIS) break
             val linha = bruta.trim()
             when {
                 linha.isEmpty() -> Unit
                 linha.startsWith("#EXTINF") -> atual = lerExtinf(linha)
                 linha.startsWith("#EXTVLCOPT:http-user-agent=") ->
-                    atual = atual?.copy(userAgent = linha.substringAfter("="))
+                    atual = atual?.copy(userAgent = limpa(linha.substringAfter("="), MAX_OPCAO))
                 linha.startsWith("#EXTVLCOPT:http-referrer=") ->
-                    atual = atual?.copy(referrer = linha.substringAfter("="))
+                    atual = atual?.copy(referrer = limpa(linha.substringAfter("="), MAX_OPCAO))
                 linha.startsWith("#") -> Unit
                 atual != null -> {
-                    canais += atual.copy(url = linha)
+                    if (aceita(linha)) canais += atual.copy(url = linha)
                     atual = null
                 }
             }
@@ -35,12 +53,12 @@ object M3uParser {
             else if (c == ',' && !dentroDeAspas) { corte = i; break }
         }
         val cabecalho = if (corte >= 0) linha.substring(0, corte) else linha
-        val nome = if (corte >= 0) linha.substring(corte + 1).trim() else ""
+        val nome = if (corte >= 0) linha.substring(corte + 1) else ""
         val tags = etiqueta.findAll(cabecalho).associate { it.groupValues[1] to it.groupValues[2] }
         return Canal(
-            nome = nome,
+            nome = limpa(nome, MAX_NOME),
             url = "",
-            grupo = tags["group-title"] ?: "",
+            grupo = limpa(tags["group-title"] ?: "", MAX_GRUPO),
             logo = tags["tvg-logo"] ?: "",
             tipo = if (tags["tipo"] == "filme") Tipo.FILME else Tipo.AO_VIVO,
         )

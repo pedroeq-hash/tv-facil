@@ -103,6 +103,12 @@ Deixar o app na tela inicial (Arc Launcher) e manter o launcher original como re
 | 8 | **Atualização falsa** | Sim (Obtainium + GitHub) | A chave de assinatura já fica fora do repo | Ativar 2FA no GitHub. O Android só aceita atualização assinada com a mesma chave | Média |
 | 9 | **O log vaza dados** | Sim, quando existir o log auditável | Ainda não existe | Mascarar as credenciais **antes** de gravar (mesma função do item 1). Guardar no armazenamento privado do app. O note só lê o log com o token | Alta |
 
+**Feito na 0.19 (14/11/2026):**
+- **Item 2 (nomes):** o `M3uParser` tira caracteres de controle e invisíveis (`\p{Cc}`, `\p{Cf}`, inclusive os de inversão de texto). Ele também corta nome em 80, grupo em 40 e user-agent/referrer em 256 caracteres, e aceita no máximo 5000 canais. O app não lê lista acima de 5 MB.
+- **Item 3 (esquemas):** o app só aceita canal `http`/`https`, com URL de até 2048 caracteres e sem espaço. Na lista daquele dia, os 237 canais já eram assim. O `curl` do pipeline usa `--proto =http,https --proto-redir =http,https`; só o `extras.m3u` local entra como `file://`. Ainda falta recusar `localhost` e IP privado na URL da lista, o que entra junto com o app par.
+- **Item 4 (player):** a `libvlc-all:3.7.7` é a mais nova da série 3. Ela traz o **VLC 3.0.25** (conferido no `libvlc.so`), posterior ao 3.0.24 do boletim VideoLAN-SB-VLC-3024 (set/2026). Por isso não precisa atualizar agora. O bloqueio de esquemas também barra `mms://` e `rtsp://`.
+- **Item 1 (senhas), parcial:** `android:allowBackup="false"`. Nenhum log grava URL hoje. A função de mascarar `username`/`password`/`token` entra junto com o log da 7a.
+
 No pipeline de hoje, o `extras.m3u` entra como `file://`. Por isso o `--proto =http,https` vale só para as listas baixadas e os canais testados; o arquivo local continua sendo lido direto.
 
 **Ordem sugerida:**
