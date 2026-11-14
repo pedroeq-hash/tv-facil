@@ -109,6 +109,8 @@ Deixar o app na tela inicial (Arc Launcher) e manter o launcher original como re
 - **Item 4 (player):** a `libvlc-all:3.7.7` é a mais nova da série 3. Ela traz o **VLC 3.0.25** (conferido no `libvlc.so`), posterior ao 3.0.24 do boletim VideoLAN-SB-VLC-3024 (set/2026). Por isso não precisa atualizar agora. O bloqueio de esquemas também barra `mms://` e `rtsp://`.
 - **Item 1 (senhas), parcial:** `android:allowBackup="false"`. Nenhum log grava URL hoje. A função de mascarar `username`/`password`/`token` entra junto com o log da 7a.
 
+**0.21 (14/11/2026), `usesCleartextTraffic="true"`:** na 1ª rodada do teste dentro do app (0.20), todos os canais `http://` falharam com `IOException`. O motivo é que o Android barra `http` sem criptografia no `HttpURLConnection` de apps com targetSdk ≥ 28. A libVLC tem conexão própria e já tocava esses canais, então liberar `http` não abre nada novo; a lista branca `http`/`https` da 0.19 continua valendo. Quando existir o app par, avaliar uma `network_security_config` que libere `http` só para o teste dos canais.
+
 No pipeline de hoje, o `extras.m3u` entra como `file://`. Por isso o `--proto =http,https` vale só para as listas baixadas e os canais testados; o arquivo local continua sendo lido direto.
 
 **Ordem sugerida:**

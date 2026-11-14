@@ -10,9 +10,12 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <!-- requestLegacyExternalStorage: no Android 10 deixa ler /sdcard/iptv direto.
-         allowBackup=false: favoritos e enderecos dos canais nao saem do stick por backup. -->
+         allowBackup=false: favoritos e enderecos dos canais nao saem do stick por backup.
+         usesCleartextTraffic: o TesteJob precisa testar canais http:// (230 nas listas); a libVLC ja os tocava. -->
+
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="true"
         android:label="TV Fácil"
         android:icon="@drawable/banner"
         android:banner="@drawable/banner"
