@@ -19,6 +19,7 @@
   No PowerShell, salve em UTF-8: `adb shell ... | Out-File -Encoding utf8 stick\backup\arquivo.txt`.
 - **Registre tudo** em `stick\mudancas.txt` (data, comando, motivo, comando para desfazer), uma linha por mudança.
 - **Nunca desative**: `com.android.systemui`, `com.android.settings`, `com.android.tv.settings`, qualquer `com.android.providers.*`, teclados (`com.google.android.leanback.ime`, `com.android.inputmethod.*`), `com.android.bluetooth`, apps de controle/pareamento (nomes com `rcu`, `remote`), `com.google.android.gms`, `com.google.android.gsf`, `com.android.vending`, `com.android.packageinstaller`, `com.android.permissioncontroller`, qualquer coisa com `wifi`, `network`, `hdmi`, `tvinput`, `tuner`, `ota` do sistema, e o **launcher original** (deixe como reserva mesmo depois de instalar outro).
+Listas M3U: o projeto não impõe restrições quanto à categoria de conteúdo das listas (canais abertos, canais pagos, filmes ou séries). O uso deve respeitar os direitos de acesso e as condições de licenciamento aplicáveis. Todas as listas e dados recebidos pela rede devem ser tratados como entradas não confiáveis e validados antes do processamento.
 - Não reinicie o stick no meio de uma sequência de mudanças. Reinicie uma vez no fim (`adb reboot`) e confirme que ele volta.
 
 ## Objetivos, em ordem
