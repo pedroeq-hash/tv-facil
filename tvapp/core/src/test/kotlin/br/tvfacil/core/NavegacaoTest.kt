@@ -36,8 +36,12 @@ class NavegacaoTest {
     }
 
     @Test
-    fun `lista - Voltar de novo fica com o sistema e sai do app`() {
-        assertNull(Navegacao.reagir(LISTA, Tecla.VOLTAR))
+    fun `lista - 1o Voltar avisa, 2o em ate 3 s fica com o sistema e sai do app`() {
+        val aviso = Reacao(LISTA, Efeito.AVISAR_SAIDA)
+        assertEquals(aviso, Navegacao.reagir(LISTA, Tecla.VOLTAR)) // nenhum Voltar antes
+        assertNull(Navegacao.reagir(LISTA, Tecla.VOLTAR, msDesdeVoltar = 500))
+        assertNull(Navegacao.reagir(LISTA, Tecla.VOLTAR, msDesdeVoltar = 3_000))
+        assertEquals(aviso, Navegacao.reagir(LISTA, Tecla.VOLTAR, msDesdeVoltar = 3_001)) // demorou: avisa de novo
     }
 
     @Test

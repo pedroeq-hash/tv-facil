@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
@@ -53,6 +54,7 @@ class MainActivity : ComponentActivity(), Acoes {
     private var favoritos by mutableStateOf(emptySet<String>()) // URLs
     private val grupos by derivedStateOf { Catalogo.grupos(canais.orEmpty(), favoritos) }
     private var teclaEngolida = -1
+    private var avisoSaida = Long.MIN_VALUE / 2 // hora (uptime) do "aperte de novo para sair"; metade evita estouro na subtracao
     private var termo by mutableStateOf("") // texto da busca
 
     // O 1º canal depois de abrir o app demora mais (libVLC e rede "frios"): espera o dobro antes do aviso.
@@ -67,7 +69,7 @@ class MainActivity : ComponentActivity(), Acoes {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // protetor de tela nao interrompe o video
-        TesteJob.agendar(this) // testa os canais a cada 6 h; por enquanto o player ainda le a lista do Termux
+        TesteJob.agendar(this) // testa os canais a cada 6 h (ver arquivoLista)
         favoritos = prefs.getStringSet("favoritos", emptySet())!!.toSet()
         player = VlcPlayer(
             this,
@@ -106,13 +108,19 @@ class MainActivity : ComponentActivity(), Acoes {
         }
         if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) {
             val tecla = Navegacao.tecla(e.keyCode)
-            val reacao = tecla?.let { Navegacao.reagir(camada, it, canalComProblema = video.fase == Fase.INDISPONIVEL) }
+            val reacao = tecla?.let {
+                Navegacao.reagir(camada, it, video.fase == Fase.INDISPONIVEL, e.eventTime - avisoSaida)
+            }
             if (reacao != null) {
                 teclaEngolida = e.keyCode // o "soltar" desta tecla nao pode clicar no item que acabou de ganhar foco
                 camada = reacao.camada
                 when (reacao.efeito) {
                     Efeito.CANAL_MAIS -> zapear(+1)
                     Efeito.CANAL_MENOS -> zapear(-1)
+                    Efeito.AVISAR_SAIDA -> {
+                        avisoSaida = e.eventTime
+                        Toast.makeText(this, "Aperte Voltar de novo para sair", Toast.LENGTH_LONG).show()
+                    }
                     null -> Unit
                 }
                 return true
@@ -207,7 +215,10 @@ class MainActivity : ComponentActivity(), Acoes {
         faixa = "Diagnóstico concluído: ${resultados.count { it.tocou }} de ${lista.size} tocaram"
     }
 
-    private val arquivoLista get() = File(Environment.getExternalStorageDirectory(), "iptv/canais_ok.m3u")
+    // A mais nova entre a lista do teste do app (TesteJob) e a do Termux (reserva): se um parar, o outro segura.
+    private val arquivoLista
+        get() = listOf(TesteJob.lista(this), File(Environment.getExternalStorageDirectory(), "iptv/canais_ok.m3u"))
+            .maxBy { it.lastModified() } // arquivo que nao existe = 0
     private var listaLidaEm = 0L // data do arquivo lido: o Termux regrava a lista a cada 6 h
     private var bloqueados = emptySet<String>()
 
