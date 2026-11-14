@@ -27,6 +27,7 @@ class M3uParserTest {
         ).single()
         assertEquals("Notícias Brasil", canal.grupo)
         assertEquals("https://exemplo.com/cnn.png", canal.logo)
+        assertEquals("cnn.br", canal.tvgId)
         assertEquals("CNN Brasil", canal.nome)
     }
 

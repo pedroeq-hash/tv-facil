@@ -10,4 +10,5 @@ data class Canal(
     val userAgent: String = "",
     val referrer: String = "",
     val tipo: Tipo = Tipo.AO_VIVO,
+    val tvgId: String = "", // identificador da iptv-org; usado para classificar (ex.: ".pt" = Portugal)
 )

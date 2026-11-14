@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity(), Acoes {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // protetor de tela nao interrompe o video
+        TesteJob.agendar(this) // testa os canais a cada 6 h; por enquanto o player ainda le a lista do Termux
         favoritos = prefs.getStringSet("favoritos", emptySet())!!.toSet()
         player = VlcPlayer(
             this,

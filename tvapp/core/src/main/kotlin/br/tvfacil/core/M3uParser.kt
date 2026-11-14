@@ -61,6 +61,7 @@ object M3uParser {
             grupo = limpa(tags["group-title"] ?: "", MAX_GRUPO),
             logo = tags["tvg-logo"] ?: "",
             tipo = if (tags["tipo"] == "filme") Tipo.FILME else Tipo.AO_VIVO,
+            tvgId = limpa(tags["tvg-id"] ?: "", MAX_NOME),
         )
     }
 }
