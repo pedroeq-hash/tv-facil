@@ -70,4 +70,11 @@ class NavegacaoTest {
         assertNull(Navegacao.reagir(GRADE, Tecla.OK))
         assertNull(Navegacao.reagir(GRADE, Tecla.CANAL_MAIS))
     }
+
+    @Test
+    fun `configurar - Voltar volta a assistir, menu abre o menu, OK fica com a tela`() {
+        assertEquals(Reacao(ASSISTINDO), Navegacao.reagir(Camada.CONFIGURAR, Tecla.VOLTAR))
+        assertEquals(Reacao(MENU), Navegacao.reagir(Camada.CONFIGURAR, Tecla.MENU))
+        assertNull(Navegacao.reagir(Camada.CONFIGURAR, Tecla.OK))
+    }
 }

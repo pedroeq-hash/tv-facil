@@ -19,6 +19,16 @@ object M3uParser {
 
     private fun limpa(texto: String, max: Int) = texto.replace(invisiveis, "").trim().take(max)
 
+    // Nome limpo: "GloboNews (1080p)" -> "GloboNews". Tira etiquetas [..] e marcas de qualidade; o resto entre () fica (ex.: ano do filme).
+    private const val MARCA = """(\d{3,4}[pi](\d{2})?|[fu]?hd|uhd|4k|sd|h\.?26[45]|hevc)"""
+    private val colchetes = Regex("""\[[^\]]*]""")
+    private val marcaEntreParenteses = Regex("""\(\s*$MARCA\s*\)""", RegexOption.IGNORE_CASE)
+    private val marcasNoFim = Regex("""(\s+$MARCA)+\s*$""", RegexOption.IGNORE_CASE)
+    private val espacos = Regex("""\s+""")
+
+    private fun nomeLimpo(nome: String) = nome.replace(colchetes, " ").replace(marcaEntreParenteses, " ")
+        .replace(espacos, " ").replace(marcasNoFim, "").trim().ifEmpty { nome }
+
     private fun aceita(url: String) = url.length <= MAX_URL && urlAceita.matches(url)
 
     fun parse(texto: String): List<Canal> {
@@ -56,7 +66,7 @@ object M3uParser {
         val nome = if (corte >= 0) linha.substring(corte + 1) else ""
         val tags = etiqueta.findAll(cabecalho).associate { it.groupValues[1] to it.groupValues[2] }
         return Canal(
-            nome = limpa(nome, MAX_NOME),
+            nome = nomeLimpo(limpa(nome, 200)).take(MAX_NOME),
             url = "",
             grupo = limpa(tags["group-title"] ?: "", MAX_GRUPO),
             logo = tags["tvg-logo"] ?: "",

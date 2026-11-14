@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TV Fácil</title>
+<style>
+  :root { color-scheme: dark; --fundo: #0e1116; --texto: #f4f1ea; --cinza: #c3c9d1; --foco: #ffc94d; --cartao: #1a1f27; }
+  body { margin: 0; padding: 16px; background: var(--fundo); color: var(--texto); font: 18px/1.4 system-ui, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 8px 0 16px; }
+  h2 { font-size: 21px; margin: 28px 0 8px; }
+  input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px; border-radius: 8px; border: 2px solid #3a424e; background: var(--cartao); color: var(--texto); }
+  input:focus { outline: none; border-color: var(--foco); }
+  button { margin-top: 8px; padding: 10px 16px; font-size: 17px; font-weight: bold; border: 0; border-radius: 8px; background: var(--foco); color: #1a1300; cursor: pointer; }
+  button.secundario { background: #2a313c; color: var(--texto); }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; background: var(--cartao); border-radius: 8px; }
+  li button { margin: 0; }
+  .tipo { display: block; color: var(--cinza); font-size: 14px; }
+  .dica, .msg { color: var(--cinza); font-size: 15px; }
+  .msg { min-height: 1.4em; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--cinza); background: var(--cartao); padding: 12px; border-radius: 8px; max-height: 50vh; overflow: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TV Fácil</h1>
+
+  <section id="parear">
+    <label for="pin">Digite o PIN que aparece na TV:</label>
+    <input id="pin" inputmode="numeric" maxlength="6" autocomplete="off">
+    <button id="entrar">Entrar</button>
+    <p id="msgPin" class="msg" role="status"></p>
+  </section>
+
+  <section id="painel" hidden>
+    <h2>Listas de canais</h2>
+    <ul id="listas"></ul>
+
+    <h2>Adicionar uma lista</h2>
+    <label for="url">Endereço da lista M3U (começa com http:// ou https://):</label>
+    <input id="url" type="url" autocomplete="off" placeholder="https://...">
+    <button id="adicionar">Adicionar</button>
+    <p id="msg" class="msg" role="status"></p>
+    <p class="dica">Suas listas entram como vieram, com as categorias delas. Depois de adicionar ou remover, a TV leva uns 5 minutos para atualizar os canais.</p>
+
+    <h2>Registro</h2>
+    <p class="dica">O que a TV fez nas últimas atualizações (só aparece o nome do site, nunca a senha).</p>
+    <button id="atualizar" class="secundario">Atualizar registro</button>
+    <pre id="registro"></pre>
+  </section>
+</main>
+<script>
+  // Texto vindo da TV sempre por textContent (nunca innerHTML): nomes de listas nao sao confiaveis.
+  let token = '';
+  const $ = (id) => document.getElementById(id);
+
+  async function pedir(metodo, caminho, corpo) {
+    const r = await fetch(caminho, { method: metodo, headers: { 'X-Token': token, 'Content-Type': 'text/plain' }, body: corpo });
+    const texto = await r.text();
+    if (!r.ok) throw new Error(texto);
+    return texto;
+  }
+
+  async function carregar() {
+    const lista = $('listas');
+    lista.replaceChildren();
+    const linhas = (await pedir('GET', '/listas')).split('\n').filter(Boolean);
+    if (linhas.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'Nenhuma lista. Adicione uma abaixo.';
+      lista.append(li);
+    }
+    for (const linha of linhas) {
+      const [i, dominio, tipo] = linha.split('\t');
+      const li = document.createElement('li');
+      const nome = document.createElement('span');
+      nome.textContent = dominio;
+      const sub = document.createElement('span');
+      sub.className = 'tipo';
+      sub.textContent = tipo === 'propria' ? 'sua lista (sem teste)' : 'pública (canais testados)';
+      nome.append(sub);
+      const remover = document.createElement('button');
+      remover.className = 'secundario';
+      remover.textContent = 'Remover';
+      remover.onclick = async () => {
+        if (!confirm('Remover a lista ' + dominio + '?')) return;
+        try { await pedir('DELETE', '/listas/' + i); $('msg').textContent = 'Lista removida. A TV atualiza em uns 5 minutos.'; carregar(); }
+        catch (e) { $('msg').textContent = e.message; }
+      };
+      li.append(nome, remover);
+      lista.append(li);
+    }
+    $('registro').textContent = await pedir('GET', '/registro');
+  }
+
+  $('entrar').onclick = async () => {
+    try {
+      token = await pedir('POST', '/parear', $('pin').value.trim());
+      $('parear').hidden = true;
+      $('painel').hidden = false;
+      await carregar();
+    } catch (e) { $('msgPin').textContent = e.message; }
+  };
+
+  $('adicionar').onclick = async () => {
+    try {
+      await pedir('POST', '/listas', $('url').value.trim());
+      $('url').value = '';
+      $('msg').textContent = 'Lista adicionada. A TV atualiza em uns 5 minutos.';
+      await carregar();
+    } catch (e) { $('msg').textContent = e.message; }
+  };
+
+  $('atualizar').onclick = () => carregar().catch((e) => { $('msg').textContent = e.message; });
+</script>
+</body>
+</html>

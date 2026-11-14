@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -50,6 +51,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -162,6 +164,7 @@ fun Tela(
             Camada.LISTA -> ListaCanais(grupos, grupoAtual, canal, acoes)
             Camada.BUSCA -> BuscaCanais(canais, termo, canal, acoes)
             Camada.GRADE -> GradeCanais(grupos, grupoAtual, canal, acoes)
+            Camada.CONFIGURAR -> Configurar()
             Camada.MENU -> Menu(canal, canal?.url in favoritos, anterior, acoes, Modifier.align(Alignment.CenterEnd))
         }
         if (faixa != null) {
@@ -468,8 +471,39 @@ private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, acoes: Acoe
         if (anterior != null) {
             Botao("Canal anterior:\n${anterior.nome}") { acoes.voltarAoAnterior() }
         }
+        Botao("Configurar pelo celular") { acoes.mostrar(Camada.CONFIGURAR) }
         Spacer(Modifier.weight(1f))
         Dica("Voltar", "fechar o menu")
+    }
+}
+
+// Enquanto esta tela esta aberta, a TV aceita a configuracao pelo navegador do celular (PIN). Fechou, fechou a porta.
+@Composable
+private fun Configurar() {
+    val context = LocalContext.current
+    val servidor = remember { ServidorConfig(context) }
+    DisposableEffect(Unit) {
+        servidor.iniciar()
+        onDispose { servidor.parar() }
+    }
+    Column(
+        Modifier.fillMaxSize().background(FUNDO).padding(horizontal = 48.dp, vertical = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Configurar pelo celular", color = TEXTO, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        val ip = servidor.ip
+        if (ip == null) {
+            Text("A TV não está conectada a uma rede Wi-Fi.", color = TEXTO, fontSize = 22.sp)
+        } else {
+            Text("1. Conecte o celular no mesmo Wi-Fi da TV.", color = CINZA, fontSize = 20.sp)
+            Text("2. No navegador do celular, abra:", color = CINZA, fontSize = 20.sp)
+            Text("http://$ip:${ServidorConfig.PORTA}", color = FOCO, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+            Text("3. Digite o PIN:", color = CINZA, fontSize = 20.sp)
+            Text(servidor.pin, color = FOCO, fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = 6.sp)
+            Text(servidor.status, color = TEXTO, fontSize = 20.sp)
+        }
+        Spacer(Modifier.weight(1f))
+        Dica("Voltar", "fechar (a configuração para de funcionar)")
     }
 }
 

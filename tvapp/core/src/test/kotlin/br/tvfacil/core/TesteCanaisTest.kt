@@ -84,7 +84,7 @@ class TesteCanaisTest {
 
     @Test
     fun `dominio guarda so o host, sem usuario, senha, caminho ou parametros`() {
-        assertEquals("servidor.com", TesteCanais.dominio("http://user:senha@servidor.com:8080/u/s/1.ts?password=x&token=y"))
+        assertEquals("servidor.com", TesteCanais.dominio("http://user:senha@servidor.com:8080/u/s/1.ts?senha=x&chave=y"))
         assertEquals("exemplo.com", TesteCanais.dominio("https://exemplo.com/live/usuario/senha/123.m3u8"))
         assertEquals("?", TesteCanais.dominio("isso nao e url"))
     }
@@ -103,5 +103,16 @@ class TesteCanaisTest {
     fun `as listas embutidas sao as do pipeline, todas https`() {
         assertEquals(3, TesteCanais.LISTAS.size)
         assertTrue(TesteCanais.LISTAS.all { it.startsWith("https://") })
+    }
+
+    @Test
+    fun `final - listas proprias primeiro, com os grupos delas, sem repetir canal`() {
+        val filme = canal("Titanic (1997)", url = "http://meu.com/movie/u/s/1.mp4", grupo = "Filmes | Drama")
+        val semGrupo = canal("Canal Meu", url = "http://meu.com/live/u/s/2.ts")
+        val cnn = canal("CNN Brasil", grupo = "News")
+        val repetido = canal("Copia", url = semGrupo.url, grupo = "Kids")
+        val lista = TesteCanais.final(proprias = listOf(filme, semGrupo), publicasTestadas = listOf(cnn, repetido))
+        assertEquals(listOf("Titanic (1997)", "Canal Meu", "CNN Brasil"), lista.map { it.nome })
+        assertEquals(listOf("Filmes | Drama", "Outros", "Noticias Brasil"), lista.map { it.grupo })
     }
 }

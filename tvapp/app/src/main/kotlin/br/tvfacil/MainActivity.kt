@@ -17,7 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.tv.material3.LocalTextStyle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
@@ -70,6 +72,15 @@ class MainActivity : ComponentActivity(), Acoes {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // protetor de tela nao interrompe o video
         TesteJob.agendar(this) // testa os canais a cada 6 h (ver arquivoLista)
+        // Lista nova (teste de 6 h ou lista adicionada pelo celular) aparece sem precisar sair do app.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(60_000)
+                    relerSeMudou()
+                }
+            }
+        }
         favoritos = prefs.getStringSet("favoritos", emptySet())!!.toSet()
         player = VlcPlayer(
             this,
@@ -215,10 +226,14 @@ class MainActivity : ComponentActivity(), Acoes {
         faixa = "Diagnóstico concluído: ${resultados.count { it.tocou }} de ${lista.size} tocaram"
     }
 
-    // A mais nova entre a lista do teste do app (TesteJob) e a do Termux (reserva): se um parar, o outro segura.
-    private val arquivoLista
-        get() = listOf(TesteJob.lista(this), File(Environment.getExternalStorageDirectory(), "iptv/canais_ok.m3u"))
-            .maxBy { it.lastModified() } // arquivo que nao existe = 0
+    // A lista do app (tem as listas proprias do usuario). A do Termux (reserva) so entra se a do app
+    // nao existir ou ficar velha (teste do app parado): ai vale a mais nova das duas.
+    private val arquivoLista: File
+        get() {
+            val doApp = TesteJob.lista(this)
+            if (System.currentTimeMillis() - doApp.lastModified() < 12 * 60 * 60 * 1000L) return doApp
+            return listOf(doApp, File(Environment.getExternalStorageDirectory(), "iptv/canais_ok.m3u")).maxBy { it.lastModified() }
+        }
     private var listaLidaEm = 0L // data do arquivo lido: o Termux regrava a lista a cada 6 h
     private var bloqueados = emptySet<String>()
 
@@ -253,8 +268,10 @@ class MainActivity : ComponentActivity(), Acoes {
         super.onStart()
         player.prenderTela()
         video.canal?.let(::abrir) // voltou ao app: retoma o ultimo canal
-        // Lista nova do Termux: rele ao voltar ao app (Home, stick acordando).
-        // shortcut: com o app sempre na frente, so rele na proxima volta; se precisar, reler tambem a cada 6 h.
+        relerSeMudou() // voltou ao app (Home, stick acordando)
+    }
+
+    private fun relerSeMudou() {
         if (canais != null && arquivoLista.lastModified() != listaLidaEm) lifecycleScope.launch { canais = lerLista() }
     }
 

@@ -60,6 +60,13 @@ object TesteCanais {
     fun organizar(funcionando: List<Canal>): List<Canal> =
         funcionando.mapNotNull { c -> classificar(c)?.let { c.copy(grupo = it) } }.sortedBy { GRUPOS.indexOf(it.grupo) }
 
+    /** Lista final: as proprias primeiro, como vieram (sem teste, grupos delas), depois as publicas testadas e organizadas. */
+    fun final(proprias: List<Canal>, publicasTestadas: List<Canal>): List<Canal> {
+        val minhas = proprias.distinctBy { it.url }.map { it.copy(grupo = Catalogo.grupoDe(it)) }
+        val urls = minhas.mapTo(HashSet()) { it.url }
+        return minhas + organizar(publicasTestadas.filterNot { it.url in urls })
+    }
+
     fun m3u(canais: List<Canal>): String = buildString {
         appendLine("#EXTM3U")
         for (c in canais) {

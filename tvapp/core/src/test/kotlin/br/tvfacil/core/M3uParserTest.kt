@@ -145,4 +145,20 @@ class M3uParserTest {
         assertEquals(5000, canais.size)
         assertEquals("C5000", canais.last().nome)
     }
+
+    private fun nome(n: String) = M3uParser.parse("#EXTINF:-1,$n\nhttps://exemplo.com/a.m3u8").single().nome
+
+    @Test
+    fun `nome limpo - tira qualidade e etiquetas, mantem o resto`() {
+        assertEquals("GloboNews", nome("GloboNews (1080p)"))
+        assertEquals("ESPN (Brazil)", nome("ESPN (Brazil) (1080p)"))
+        assertEquals("Canal Brasil", nome("Canal Brasil [Geo-blocked]"))
+        assertEquals("Rede Vida", nome("Rede Vida (720p) [Not 24/7]"))
+        assertEquals("Discovery", nome("Discovery HD"))
+        assertEquals("Cine Ação", nome("Cine Ação FHD H265"))
+        assertEquals("Esporte", nome("Esporte (1080p60)"))
+        assertEquals("Titanic (1997)", nome("Titanic (1997)"))
+        assertEquals("HDTV Notícias", nome("HDTV Notícias")) // HD dentro da palavra fica
+        assertEquals("4K", nome("4K")) // so marcas: fica como estava
+    }
 }

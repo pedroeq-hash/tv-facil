@@ -1,7 +1,7 @@
 package br.tvfacil.core
 
 enum class Tecla { OK, VOLTAR, MENU, CANAL_MAIS, CANAL_MENOS }
-enum class Camada { ASSISTINDO, LISTA, MENU, BUSCA, GRADE }
+enum class Camada { ASSISTINDO, LISTA, MENU, BUSCA, GRADE, CONFIGURAR }
 enum class Efeito { CANAL_MAIS, CANAL_MENOS, AVISAR_SAIDA }
 data class Reacao(val camada: Camada, val efeito: Efeito? = null)
 
@@ -34,7 +34,7 @@ object Navegacao {
             Tecla.CANAL_MAIS -> Reacao(camada, Efeito.CANAL_MAIS)
             Tecla.CANAL_MENOS -> Reacao(camada, Efeito.CANAL_MENOS)
         }
-        Camada.LISTA, Camada.MENU, Camada.BUSCA, Camada.GRADE -> when (tecla) {
+        Camada.LISTA, Camada.MENU, Camada.BUSCA, Camada.GRADE, Camada.CONFIGURAR -> when (tecla) {
             Tecla.VOLTAR -> when {
                 camada != Camada.LISTA -> Reacao(Camada.ASSISTINDO)
                 msDesdeVoltar <= 3_000 -> null

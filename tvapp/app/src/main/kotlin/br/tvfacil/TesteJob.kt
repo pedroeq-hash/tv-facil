@@ -7,6 +7,8 @@ import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
 import br.tvfacil.core.Canal
+import br.tvfacil.core.Fonte
+import br.tvfacil.core.Fontes
 import br.tvfacil.core.M3uParser
 import br.tvfacil.core.TesteCanais
 import kotlinx.coroutines.CoroutineScope
@@ -17,6 +19,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -50,6 +54,7 @@ class TesteJob : JobService() {
 
     companion object {
         private const val ID = 1
+        private const val ID_AGORA = 2 // rodada extra quando as listas mudam pela pagina do celular
         private const val SEIS_HORAS = 6 * 60 * 60 * 1000L
         private const val PARALELO = 4 // como o PARALELO=4 do Termux: nao atrapalha quem assiste
 
@@ -65,44 +70,77 @@ class TesteJob : JobService() {
             )
         }
 
+        /** Roda uma vez assim que houver rede (listas mudaram pela pagina de configuracao). */
+        fun rodarAgora(context: Context) {
+            context.getSystemService(JobScheduler::class.java).schedule(
+                JobInfo.Builder(ID_AGORA, ComponentName(context, TesteJob::class.java))
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .build(),
+            )
+        }
+
         fun lista(context: Context) = File(context.filesDir, "canais_ok.m3u")
+
+        // As listas de onde vem os canais (privado: pode ter senha na URL).
+        private fun arquivoFontes(context: Context) = File(context.filesDir, "listas.txt")
+
+        fun lerFontes(context: Context): List<Fonte> = Fontes.ler(arquivoFontes(context).takeIf { it.exists() }?.readText())
+
+        fun salvarFontes(context: Context, fontes: List<Fonte>) {
+            val novo = File(context.filesDir, "listas.txt.novo")
+            novo.writeText(Fontes.escrever(fontes))
+            check(novo.renameTo(arquivoFontes(context))) { "nao consegui salvar as listas" }
+        }
+
+        /** Fim do registro, para a pagina de configuracao (so tem dominios). */
+        fun fimDoRegistro(context: Context): String = runCatching { arquivoRegistro(context).readText().takeLast(6000) }.getOrDefault("")
+
+        private val trava = Mutex() // duas rodadas (a de 6 h e a "agora") nunca gravam juntas
 
         private fun agora() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
         // Fica em /sdcard/Android/data/br.tvfacil/files/ para dar para ler por adb; so tem dominios, nunca a URL inteira.
-        private fun registro(context: Context) = Registro(File(context.getExternalFilesDir(null) ?: context.filesDir, "registro.txt"))
+        private fun arquivoRegistro(context: Context) = File(context.getExternalFilesDir(null) ?: context.filesDir, "registro.txt")
+        private fun registro(context: Context) = Registro(arquivoRegistro(context))
 
-        private suspend fun rodar(context: Context) {
+        private suspend fun rodar(context: Context) = trava.withLock {
             val log = registro(context)
             val inicio = System.currentTimeMillis()
             log.escrever("${agora()} inicio da rodada")
-            val listas = TesteCanais.LISTAS.map { url ->
-                runCatching {
-                    val (codigo, corpo) = abrir(url, "", "", maxBytes = 5_000_000)
+            val fontes = lerFontes(context)
+            val baixadas = fontes.map { fonte ->
+                fonte to runCatching {
+                    // Lista propria pode ser grande (pacotes com filmes): ate 15 MB; o M3uParser corta em 5000 canais.
+                    val (codigo, corpo) = abrir(fonte.url, "", "", maxBytes = if (fonte.propria) 15_000_000 else 5_000_000)
                     check(codigo in 200..299) { "HTTP $codigo" }
                     M3uParser.parse(corpo.toString(Charsets.UTF_8))
                 }.getOrElse {
-                    log.escrever("${agora()} Falhou ao baixar ${TesteCanais.dominio(url)} (${it.message ?: it.javaClass.simpleName})")
+                    // So o tipo do erro: a mensagem pode trazer a URL com senha.
+                    log.escrever("${agora()} Falhou ao baixar ${TesteCanais.dominio(fonte.url)} (${it.javaClass.simpleName})")
                     emptyList()
                 }
             }
-            val candidatos = TesteCanais.juntar(listas)
+            // Listas proprias entram sem teste: lista paga limita conexoes, e testar centenas de canais pode bloquear a conta.
+            val proprias = baixadas.filter { it.first.propria }.flatMap { it.second }
+            val candidatos = TesteCanais.juntar(baixadas.filterNot { it.first.propria }.map { it.second })
             val fila = Dispatchers.IO.limitedParallelism(PARALELO)
             val resultados = coroutineScope { candidatos.map { c -> async(fila) { c to testar(c) } }.awaitAll() }
             val funcionando = resultados.filter { it.second == null }.map { it.first } // mantem a ordem das listas
             resultados.forEach { (c, motivo) -> if (motivo != null) log.escrever("  falhou: ${TesteCanais.dominio(c.url)} - $motivo") }
 
-            val final = TesteCanais.organizar(funcionando)
-            if (candidatos.isEmpty() || final.isEmpty()) { // ex.: sem internet: mantem a lista antiga
+            val final = TesteCanais.final(proprias, funcionando)
+            if (final.isEmpty()) { // ex.: sem internet: mantem a lista antiga
                 log.escrever("${agora()} ERRO: ${candidatos.size} canais lidos, ${funcionando.size} funcionando, ${final.size} na lista - lista antiga mantida")
-                return
+                return@withLock
             }
             // Nome provisorio + troca no fim: quem le nunca pega a lista pela metade.
             val novo = File(context.filesDir, "canais_ok.m3u.novo")
             novo.writeText(TesteCanais.m3u(final))
             check(novo.renameTo(lista(context))) { "nao consegui trocar a lista" }
             val segundos = (System.currentTimeMillis() - inicio) / 1000
-            log.escrever(TesteCanais.resumo(agora(), candidatos.size, funcionando.size, final, segundos))
+            val minhas = proprias.distinctBy { it.url }.size
+            log.escrever(TesteCanais.resumo(agora(), candidatos.size, funcionando.size, final.drop(minhas), segundos))
+            if (minhas > 0) log.escrever("${agora()} + $minhas canais de listas proprias (sem teste)")
         }
 
         /** null = o canal respondeu; senao, o motivo (vai para o log). */

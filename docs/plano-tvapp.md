@@ -113,6 +113,29 @@ Deixar o app na tela inicial (Arc Launcher) e manter o launcher original como re
 
 No pipeline de hoje, o `extras.m3u` entra como `file://`. Por isso o `--proto =http,https` vale só para as listas baixadas e os canais testados; o arquivo local continua sendo lido direto.
 
+### App par como página servida pela própria TV (decidido em 14/11/2026, 0.23)
+O stick vai para outra casa. Quem configura é o filho da usuária, e ele quer pôr listas M3U próprias (geralmente pagas, com usuário e senha na URL). Em vez de um app no notebook, a TV serve uma página simples, aberta no navegador do celular ou do notebook na mesma rede Wi-Fi. As regras abaixo valem antes de qualquer código.
+
+- **Item 6 (qualquer aparelho do Wi-Fi):** o servidor (porta 8765) só existe enquanto a tela "Configurar pelo celular" está aberta na TV. No dia a dia, nada fica escutando.
+  - O pareamento usa um PIN de 6 dígitos (`SecureRandom`) mostrado na TV. Com 5 PINs errados, o servidor fecha.
+  - O token tem 32 bytes aleatórios, fica só na memória e vale só naquela sessão.
+- **Item 7 (site malicioso / DNS rebinding):** a TV recusa qualquer pedido fora destas regras:
+  - o `Host` tem que ser exatamente `<IP-da-TV>:8765`;
+  - se vier `Origin`, ele tem que ser `http://<IP-da-TV>:8765`;
+  - toda rota, menos a página e o `/parear`, exige o cabeçalho `X-Token`. Um formulário de outro site não consegue mandar cabeçalho próprio.
+  - Não há CORS. As respostas levam `Content-Security-Policy` (nada externo, `frame-ancestors 'none'`) e `Cache-Control: no-store`.
+- **Item 3 (URL de lista):** só `http`/`https`, até 2048 caracteres. São recusados `localhost` e IPs de loopback, rede privada ou link-local escritos direto na URL.
+  - Limite conhecido: um nome que o DNS resolve para um IP privado passa. Isso deve ser conferido no DNS se a página ganhar mais poder.
+- **Itens 1 e 9 (senha da lista):**
+  - as URLs ficam só no armazenamento privado do app (`filesDir`, com `allowBackup=false`) e nunca vão para o `/sdcard`;
+  - a página e o log mostram só o domínio;
+  - as listas próprias não passam pelo teste de canais, porque listas pagas limitam conexões e testar centenas de canais pode bloquear a conta.
+- **Pedido HTTP (não confiável):**
+  - linha e cabeçalhos até 8 KB, corpo até 4 KB, 10 s de tempo;
+  - uma conexão por vez;
+  - o código que lê o pedido fica no `:core`, com testes.
+- **Item 2 (nomes na página):** a página só usa `textContent`, nunca `innerHTML`.
+
 **Ordem sugerida:**
 1. Proteger o que já existe: itens 1, 3 e 4, em TDD no `:core`, mais o `curl --proto`.
 2. Fazer a 7a (pipeline dentro do app, com o log).
