@@ -12,9 +12,43 @@ object Capa {
     }
 }
 
-/** Ultimas series vistas ("Continuar assistindo"): a mais recente na frente. */
-object Recentes {
-    fun usar(lista: List<String>, chave: String, max: Int = 30) = (listOf(chave) + lista.filter { it != chave }).take(max)
+/** "Continuar assistindo": o que ficar 30 dias sem ser aberto sai sozinho. */
+const val VALIDADE_MS = 30L * 24 * 60 * 60 * 1000
 
-    fun tirar(lista: List<String>, chave: String) = lista.filter { it != chave }
+/** Serie vista (chave = categoria + nome) e quando foi aberta pela ultima vez. */
+data class Recente(val chave: String, val quando: Long)
+
+/** Ultimas series vistas: a mais recente na frente. */
+object Recentes {
+    fun usar(lista: List<Recente>, chave: String, agora: Long, max: Int = 30) =
+        (listOf(Recente(chave, agora)) + lista.filter { it.chave != chave }).take(max)
+
+    fun tirar(lista: List<Recente>, chave: String) = lista.filter { it.chave != chave }
+
+    fun validas(lista: List<Recente>, agora: Long) = lista.filter { agora - it.quando <= VALIDADE_MS }
+
+    /** Uma por linha: "chave\tquando". Linha antiga (antes da 0.33, sem hora) conta a partir de agora. */
+    fun ler(texto: String, agora: Long) = texto.lines().filter { it.isNotBlank() }.map { linha ->
+        Recente(linha.substringBefore('\t'), linha.substringAfter('\t', "").toLongOrNull() ?: agora)
+    }
+
+    fun escrever(lista: List<Recente>) = lista.joinToString("\n") { "${it.chave}\t${it.quando}" }
+}
+
+/** Onde o filme ou episodio parou ("pos:duracao:quando", em ms). */
+data class Posicao(val pos: Long, val duracao: Long, val quando: Long) {
+    fun texto() = "$pos:$duracao:$quando"
+    fun vencida(agora: Long) = agora - quando > VALIDADE_MS
+
+    companion object {
+        /** Formato antigo "pos:duracao" (antes da 0.33) conta a partir de agora; texto estragado = null. */
+        fun ler(texto: String, agora: Long): Posicao? {
+            val p = texto.split(':').map { it.toLongOrNull() ?: return null }
+            return when (p.size) {
+                2 -> Posicao(p[0], p[1], agora)
+                3 -> Posicao(p[0], p[1], p[2])
+                else -> null
+            }
+        }
+    }
 }

@@ -97,6 +97,13 @@
       <p id="msgCategorias" class="msg" role="status"></p>
     </details>
 
+    <h2>Começar do zero</h2>
+    <p class="dica">O "Continuar assistindo" já tira sozinho o que ficar 30 dias sem ser aberto. Aqui você zera na hora. Listas, avulsos e categorias continuam como estão.</p>
+    <button id="zerarFilmes" class="secundario">Zerar Continuar assistindo de Filmes</button>
+    <button id="zerarSeries" class="secundario">Zerar Continuar assistindo de Séries</button>
+    <button id="zerarFavoritos" class="secundario">Zerar favoritos</button>
+    <p id="msgZerar" class="msg" role="status"></p>
+
     <h2>O que a TV fez</h2>
     <p class="dica">As últimas atualizações, a mais nova primeiro (horário da TV). Só aparece o nome do site, nunca a senha.</p>
     <ul id="resumo"></ul>
@@ -284,6 +291,18 @@
       await pedir('PUT', '/escondidas', marcadas.join('\n'));
       $('msgCategorias').textContent = marcadas.length ? 'Salvo. Escondidas: ' + marcadas.join(', ') + '.' : 'Salvo. Nenhuma categoria escondida.';
     } catch (e) { $('msgCategorias').textContent = e.message; }
+  }
+
+  for (const [botao, oQue, texto] of [
+    ['zerarFilmes', 'filmes', 'o Continuar assistindo de Filmes'],
+    ['zerarSeries', 'series', 'o Continuar assistindo de Séries'],
+    ['zerarFavoritos', 'favoritos', 'todos os favoritos'],
+  ]) {
+    $(botao).onclick = async () => {
+      if (!confirm('Apagar ' + texto + '?')) return;
+      try { await pedir('POST', '/zerar/' + oQue); $('msgZerar').textContent = 'Pronto: ' + texto + ' foi zerado.'; }
+      catch (e) { $('msgZerar').textContent = e.message; }
+    };
   }
 
   $('entrar').onclick = async () => {

@@ -20,6 +20,7 @@ class Painel(
     private val categorias: () -> List<String> = { emptyList() }, // de filmes e series (lidas so quando a pagina pede)
     escondidas: List<String> = Escondidas.PADRAO,
     private val aoMudarEscondidas: (List<String>) -> Unit = {},
+    private val aoZerar: (String) -> Unit = {}, // "filmes" / "series" (Continuar assistindo) ou "favoritos"
     private val aoMudar: (List<Fonte>) -> Unit,
 ) {
     var fontes = fontes
@@ -88,6 +89,10 @@ class Painel(
             p.metodo == "PUT" && p.caminho == "/escondidas" -> {
                 escondidas = Escondidas.ler(p.corpo)
                 aoMudarEscondidas(escondidas)
+                texto(200, "ok")
+            }
+            p.metodo == "POST" && p.caminho in listOf("/zerar/filmes", "/zerar/series", "/zerar/favoritos") -> {
+                aoZerar(p.caminho.removePrefix("/zerar/"))
                 texto(200, "ok")
             }
             p.metodo == "GET" && p.caminho == "/registro" -> texto(200, registro())

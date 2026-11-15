@@ -169,6 +169,21 @@ class PainelTest {
     }
 
     @Test
+    fun `zerar filmes, series ou favoritos, cada um separado, so com o token e so por POST`() {
+        val zerados = mutableListOf<String>()
+        val p = Painel(
+            endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "", registro = { "" },
+            avulsos = emptyList(), aoMudarAvulsos = {}, aoZerar = { zerados += it },
+        ) {}
+        assertEquals(401, p.responder(pedido("POST", "/zerar/filmes")).codigo)
+        assertEquals(404, p.responder(comToken("GET", "/zerar/filmes")).codigo)
+        assertEquals(404, p.responder(comToken("POST", "/zerar/tudo")).codigo)
+        assertEquals(emptyList(), zerados)
+        for (o in listOf("filmes", "series", "favoritos")) assertEquals(200, p.responder(comToken("POST", "/zerar/$o")).codigo)
+        assertEquals(listOf("filmes", "series", "favoritos"), zerados)
+    }
+
+    @Test
     fun `endereco completo da lista so com o token`() {
         assertEquals(401, painel.responder(pedido("GET", "/listas/0/endereco")).codigo)
         assertEquals("https://iptv-org.github.io/iptv/countries/br.m3u", painel.responder(comToken("GET", "/listas/0/endereco")).corpo)

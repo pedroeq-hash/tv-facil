@@ -119,6 +119,7 @@ interface Acoes {
     fun assistirFilme(canal: Canal, voltarPara: Camada, grupo: String)
     fun abrirSerie(item: Canal, grupo: String)
     fun mudarTermoGrade(texto: String)
+    fun zerar(oQue: String) // pagina de configuracao: "filmes" / "series" (Continuar assistindo) ou "favoritos"
 }
 
 /** O que as telas de filmes e series mostram (estado na MainActivity). tempo: lido so na barra, que redesenha 1 vez por segundo. */
@@ -205,6 +206,7 @@ fun Tela(
             // Categorias que o app ja tem na memoria (as escondidas o Painel acrescenta): ler os 30 mil filmes do disco levava 13 s.
             Camada.CONFIGURAR -> Configurar(
                 (grupos + vod.gruposFilmes + vod.gruposSeries).map { it.nome }.filter { it != CONTINUAR && it != Catalogo.FAVORITOS },
+                acoes::zerar,
             )
             Camada.FILMES, Camada.SERIES -> if (vod.carregando && vod.gruposFilmes.isEmpty() && vod.gruposSeries.isEmpty()) {
                 Aviso("Carregando filmes e séries…\n\nAparecem sozinhos em alguns segundos.")
@@ -695,9 +697,9 @@ private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, temFilmes: 
 
 // Enquanto esta tela esta aberta, a TV aceita a configuracao pelo navegador do celular (PIN). Fechou, fechou a porta.
 @Composable
-private fun Configurar(categorias: List<String>) {
+private fun Configurar(categorias: List<String>, aoZerar: (String) -> Unit) {
     val context = LocalContext.current
-    val servidor = remember { ServidorConfig(context, categorias) }
+    val servidor = remember { ServidorConfig(context, categorias, aoZerar) }
     DisposableEffect(Unit) {
         servidor.iniciar()
         onDispose { servidor.parar() }

@@ -41,6 +41,8 @@ import br.tvfacil.core.M3uParser
 import br.tvfacil.core.Navegacao
 import br.tvfacil.core.Pulo
 import br.tvfacil.core.ResultadoTeste
+import br.tvfacil.core.Posicao
+import br.tvfacil.core.Recente
 import br.tvfacil.core.Recentes
 import br.tvfacil.core.Retomar
 import br.tvfacil.core.Serie
@@ -85,10 +87,10 @@ class MainActivity : ComponentActivity(), Acoes {
         val andamento = filmes.filter { it.url in emAndamento }
         (if (andamento.isEmpty()) emptyList() else listOf(Grupo(CONTINUAR, andamento))) + Catalogo.grupos(filmes, emptySet())
     }
-    private var seriesRecentes by mutableStateOf(emptyList<String>()) // chaveSerie das ultimas vistas, a mais recente primeiro
+    private var seriesRecentes by mutableStateOf(emptyList<Recente>()) // ultimas series vistas, a mais recente primeiro
     private val gruposSeries by derivedStateOf {
         val porChave = series.associateBy(::chaveSerie)
-        val continuar = seriesRecentes.mapNotNull { porChave[it] } // escondida ou fora da lista nova: some daqui tambem
+        val continuar = seriesRecentes.mapNotNull { porChave[it.chave] } // escondida ou fora da lista nova: some daqui tambem
         (if (continuar.isEmpty()) emptyList() else listOf(Grupo(CONTINUAR, continuar.map { it.comoCanal() }))) +
             series.groupBy { it.categoria }.map { (cat, ss) -> Grupo(cat, ss.map { it.comoCanal() }) }
     }
@@ -132,7 +134,9 @@ class MainActivity : ComponentActivity(), Acoes {
             }
         }
         favoritos = prefs.getStringSet("favoritos", emptySet())!!.toSet()
-        seriesRecentes = prefs.getString("series_recentes", "")!!.lines().filter { it.isNotEmpty() }
+        // "Continuar assistindo": o que ficou 30 dias sem ser aberto sai sozinho (e o formato antigo ganha a data de hoje).
+        val agora = System.currentTimeMillis()
+        guardarRecentes(Recentes.validas(Recentes.ler(prefs.getString("series_recentes", "")!!, agora), agora))
         player = VlcPlayer(
             this,
             aoTocar = {
@@ -146,6 +150,12 @@ class MainActivity : ComponentActivity(), Acoes {
                 if (pos - salvoEm > 30_000 || pos < salvoEm) salvarPosicao()
             },
         )
+        val editor = posicoes.edit()
+        for ((url, valor) in posicoes.all) {
+            val p = (valor as? String)?.let { Posicao.ler(it, agora) }
+            if (p == null || p.vencida(agora)) editor.remove(url) else editor.putString(url, p.texto())
+        }
+        editor.commit()
         emAndamento = posicoes.all.keys.toSet()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
@@ -273,6 +283,32 @@ class MainActivity : ComponentActivity(), Acoes {
         video.canal?.let(::abrir)
     }
 
+    // Vem da pagina (thread do servidor): mexe no estado da tela na thread principal.
+    // filmes/series: o "Continuar assistindo" de cada um (posicoes dos filmes ou dos episodios); favoritos: os canais.
+    override fun zerar(oQue: String) = runOnUiThread {
+        val urlsFilmes = filmes.mapTo(HashSet()) { it.url }
+        when (oQue) {
+            "filmes", "series" -> {
+                val doTipo = posicoes.all.keys.filter { (it in urlsFilmes) == (oQue == "filmes") }
+                val editor = posicoes.edit()
+                doTipo.forEach { editor.remove(it) }
+                editor.apply()
+                emAndamento = emAndamento - doTipo.toSet()
+                if (oQue == "series") {
+                    guardarRecentes(emptyList())
+                    val ultimosEpisodios = prefs.all.keys.filter { it.startsWith("serie:") }
+                    val p = prefs.edit()
+                    ultimosEpisodios.forEach { p.remove(it) }
+                    p.apply()
+                }
+            }
+            "favoritos" -> {
+                favoritos = emptySet()
+                prefs.edit().remove("favoritos").apply()
+            }
+        }
+    }
+
     override fun mudarTermoGrade(texto: String) {
         termoGrade = texto
     }
@@ -298,7 +334,7 @@ class MainActivity : ComponentActivity(), Acoes {
                 temporadaAtual = grupo
                 serieAberta?.let {
                     prefs.edit().putString(chaveSerie(it), canal.url).apply()
-                    guardarRecentes(Recentes.usar(seriesRecentes, chaveSerie(it)))
+                    guardarRecentes(Recentes.usar(seriesRecentes, chaveSerie(it), System.currentTimeMillis()))
                 }
             }
             else -> Unit
@@ -312,17 +348,17 @@ class MainActivity : ComponentActivity(), Acoes {
         abrir(canal, inicioSalvo(canal))
     }
 
-    private fun guardarRecentes(lista: List<String>) {
+    private fun guardarRecentes(lista: List<Recente>) {
         seriesRecentes = lista
-        prefs.edit().putString("series_recentes", lista.joinToString("\n")).apply()
+        prefs.edit().putString("series_recentes", Recentes.escrever(lista)).apply()
     }
 
     // Nome + categoria: o id da serie muda quando a lista e refeita, o nome nao.
     private fun chaveSerie(s: Serie) = "serie:${s.categoria}|${s.nome}"
 
     private fun inicioSalvo(c: Canal): Long {
-        val partes = posicoes.getString(c.url, null)?.split(':')?.mapNotNull { it.toLongOrNull() }
-        return if (partes?.size == 2) Retomar.inicio(partes[0], partes[1]) else 0
+        val p = posicoes.getString(c.url, null)?.let { Posicao.ler(it, System.currentTimeMillis()) } ?: return 0
+        return Retomar.inicio(p.pos, p.duracao)
     }
 
     private fun salvarPosicao() {
@@ -331,7 +367,7 @@ class MainActivity : ComponentActivity(), Acoes {
         if (pos <= 0) return
         salvoEm = pos
         if (Retomar.inicio(pos, duracao) > 0) {
-            posicoes.edit().putString(c.url, "$pos:$duracao").apply()
+            posicoes.edit().putString(c.url, Posicao(pos, duracao, System.currentTimeMillis()).texto()).apply()
             emAndamento = emAndamento + c.url
         } else {
             posicoes.edit().remove(c.url).apply()
