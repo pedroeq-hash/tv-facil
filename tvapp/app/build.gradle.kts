@@ -37,8 +37,8 @@ android {
         applicationId = "br.tvfacil"
         minSdk = 29
         targetSdk = 36
-        versionCode = 27
-        versionName = "0.27"
+        versionCode = 28
+        versionName = "0.28"
         // O stick e 32 bits: so essa arquitetura deixa o APK bem menor.
         ndk { abiFilters += "armeabi-v7a" }
     }

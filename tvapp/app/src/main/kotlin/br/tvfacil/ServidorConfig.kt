@@ -25,6 +25,7 @@ class ServidorConfig(private val context: Context) {
     var status by mutableStateOf("Aguardando o aparelho…")
         private set
     private var porta: ServerSocket? = null
+    private val categorias by lazy { Arquivos.categorias(context) }
 
     fun iniciar() {
         val ip = ip ?: return
@@ -42,7 +43,7 @@ class ServidorConfig(private val context: Context) {
                 TesteJob.rodarAgora(context)
                 status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
             },
-            categorias = { Arquivos.categorias(context) },
+            categorias = { categorias }, // lidas 1 vez por sessao: sao 30 mil filmes, e a pagina recarrega a cada acao
             escondidas = Arquivos.lerEscondidas(context),
             aoMudarEscondidas = { categorias ->
                 Arquivos.salvarEscondidas(context, categorias)

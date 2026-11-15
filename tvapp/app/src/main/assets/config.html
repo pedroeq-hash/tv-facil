@@ -91,16 +91,19 @@
     return texto;
   }
 
+  // Busca tudo e so depois troca a tela de uma vez; se outra atualizacao comecou no meio, esta desiste
+  // (antes: varias atualizacoes seguidas apagavam juntas e depois desenhavam juntas, repetindo as listas).
+  let vezes = 0;
   async function carregar() {
-    const lista = $('listas');
-    lista.replaceChildren();
+    const vez = ++vezes;
     const linhas = (await pedir('GET', '/listas')).split('\n').filter(Boolean);
-    if (linhas.length === 0) {
-      const li = document.createElement('li');
-      li.textContent = 'Nenhuma lista. Adicione uma abaixo.';
-      lista.append(li);
-    }
-    for (const linha of linhas) {
+    const n = await pedir('GET', '/avulsos');
+    const linhasCat = (await pedir('GET', '/categorias')).split('\n').filter(Boolean);
+    const frases = (await pedir('GET', '/resumo')).split('\n').filter(Boolean);
+    const registro = await pedir('GET', '/registro');
+    if (vez !== vezes) return;
+
+    const itens = linhas.map((linha) => {
       const [i, dominio, tipo, rotulo = ''] = linha.split('\t');
       const li = document.createElement('li');
       const nome = document.createElement('span');
@@ -130,19 +133,14 @@
       };
       botoes.append(renomear, remover);
       li.append(nome, botoes);
-      lista.append(li);
-    }
-    const n = await pedir('GET', '/avulsos');
+      return li;
+    });
+    if (!itens.length) itens.push(texto('Nenhuma lista. Adicione uma abaixo.'));
+    $('listas').replaceChildren(...itens);
+
     $('avulsos').textContent = n === '0' ? 'Nenhum canal avulso na TV.' : 'A TV tem ' + n + ' canais avulsos (sem teste).';
-    const categorias = $('categorias');
-    categorias.replaceChildren();
-    const linhasCat = (await pedir('GET', '/categorias')).split('\n').filter(Boolean);
-    if (!linhasCat.length) {
-      const li = document.createElement('li');
-      li.textContent = 'Nenhum filme ou série ainda (aparecem depois que a TV baixa as suas listas).';
-      categorias.append(li);
-    }
-    for (const linha of linhasCat) {
+
+    const caixas = linhasCat.map((linha) => {
       const [nome, escondida] = linha.split('\t');
       const li = document.createElement('li');
       const rotulo = document.createElement('label');
@@ -154,20 +152,25 @@
       caixa.onchange = salvarEscondidas;
       rotulo.append(caixa, document.createTextNode(' ' + nome));
       li.append(rotulo);
-      categorias.append(li);
-    }
-    const resumo = $('resumo');
-    resumo.replaceChildren();
-    const frases = (await pedir('GET', '/resumo')).split('\n').filter(Boolean);
+      return li;
+    });
+    if (!caixas.length) caixas.push(texto('Nenhum filme ou série ainda (aparecem depois que a TV baixa as suas listas).'));
+    $('categorias').replaceChildren(...caixas);
+
     if (!frases.length) frases.push('Nada ainda: a TV testa os canais a cada 6 horas.');
-    for (const f of frases) {
-      const li = document.createElement('li');
-      li.textContent = f;
+    $('resumo').replaceChildren(...frases.map((f) => {
+      const li = texto(f);
       if (f.startsWith('Próxim')) li.className = 'previsao';
       else if (f.startsWith('⚠')) li.className = 'alerta';
-      resumo.append(li);
-    }
-    $('registro').textContent = await pedir('GET', '/registro');
+      return li;
+    }));
+    $('registro').textContent = registro;
+  }
+
+  function texto(t) {
+    const li = document.createElement('li');
+    li.textContent = t;
+    return li;
   }
 
   async function salvarEscondidas() {
