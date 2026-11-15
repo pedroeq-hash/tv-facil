@@ -144,6 +144,24 @@ class BibliotecaTest {
     }
 
     @Test
+    fun `capa da serie - a do 1o episodio que tiver, na versao pequena, e volta pelo indice`() {
+        val eps = sequenceOf(
+            ep("Dark S01E01"),
+            c("Dark S01E02", "http://s.com/series/u/p/2.mp4", "SÉRIES | X").copy(logo = "https://image.tmdb.org/t/p/w600_and_h900_bestv2/d.jpg"),
+            c("Dark S01E03", "http://s.com/series/u/p/3.mp4", "SÉRIES | X").copy(logo = "https://image.tmdb.org/t/p/w500/outra.jpg"),
+            c("Lost S01E01", "http://s.com/series/u/p/4.mp4", "SÉRIES | X").copy(logo = "http://192.168.0.5/capa.jpg"),
+        )
+        val indice = Biblioteca.montar(eps, Gravado())
+        assertEquals(listOf("https://image.tmdb.org/t/p/w185/d.jpg", ""), indice.map { it.logo })
+        assertEquals(indice, Biblioteca.lerIndice(Biblioteca.indice(indice)))
+    }
+
+    @Test
+    fun `indice antigo (4 colunas, sem capa) continua valendo`() {
+        assertEquals(listOf(Serie(4, "Dark", "NETFLIX", 26)), Biblioteca.lerIndice("4\tNETFLIX\tDark\t26\n"))
+    }
+
+    @Test
     fun `numero do episodio para o cartao`() {
         assertEquals(13, Biblioteca.numero("Gotham S03E13"))
         assertEquals(0, Biblioteca.numero("Especial"))

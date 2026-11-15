@@ -196,6 +196,16 @@ A tela carrega só os filmes e o índice das séries. Os episódios de uma séri
 - **Filmes e séries não somem mais (0.29):** a leitura fica guardada no processo (`BibliotecaLida`), então fechar e abrir o app não relê os 30 mil filmes, o que levava de 15 a 30 s.
   - Se a leitura falha (por exemplo, com o `TesteJob` trocando a pasta), fica a anterior e o app tenta de novo em 1 min. Antes, uma falha deixava tudo vazio até o dia seguinte.
   - Enquanto lê, o menu mostra Filmes e Séries com "Carregando…".
+- **Capas (0.30):** o `tvg-logo` não é confiável. `Capa.endereco` aplica as mesmas regras das listas (http/https da internet, até 2048) e troca o tamanho do TMDB por `w185`: 17 KB em vez de 106 KB.
+  - O carregador é próprio (`Capas`), sem biblioteca nova: 2 downloads por vez, até 1 MB por imagem, imagem reduzida a ~200×300 em RGB_565, cache de ~24 MB na memória e até 50 MB no disco.
+  - A série usa a capa do 1º episódio que tiver uma, guardada na 5ª coluna do `series.tsv`; o formato antigo, de 4 colunas, continua valendo.
+- **"Continuar assistindo" em Séries (0.30):** guarda as últimas 30 séries vistas (`Recentes`). OK toca o episódio onde parou, e Voltar mostra a tela da série. A série sai do grupo quando o último episódio termina.
+- **Endereço completo das listas (0.30, mudança de decisão):** antes, a página mostrava só o domínio. Agora o botão "Copiar endereço" mostra a URL inteira, mas só depois do PIN e com o token, para quem já pode trocar a lista (`GET /listas/<i>/endereco`).
+  - Motivo: o stick vai para o colega, que é dono das listas e precisa recuperá-las.
+  - O registro continua só com domínios.
+- **Avulsos um por vez (0.30):** canal ao vivo ou filme pela página (`POST /avulsos/um`). O formulário vira uma entrada M3U e passa pelo `M3uParser`, com a mesma validação do arquivo.
+  - O arquivo agora acrescenta em vez de substituir, sem repetir link, até 300 no total, e dá para remover um de cada vez.
+  - Canais avulsos vão para a lista de canais; filmes avulsos vão para Filmes, em "Meus filmes" ou na categoria escolhida. Continuam **sem teste**.
 - **Job diário (ID 3):** não baixa a lista de novo se a biblioteca tem menos de 20 h. Antes, ele rodava logo depois do ID 4. Quando o Android interrompe um job, o registro passa a dizer "interrompida pelo Android"; antes aparecia o nome embaralhado pelo R8.
 
 **Ordem sugerida:**

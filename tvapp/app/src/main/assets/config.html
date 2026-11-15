@@ -12,6 +12,8 @@
   h2 { font-size: 21px; margin: 28px 0 8px; }
   input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 18px; border-radius: 8px; border: 2px solid #3a424e; background: var(--cartao); color: var(--texto); }
   input:focus { outline: none; border-color: var(--foco); }
+  select { width: 100%; padding: 12px; font-size: 18px; border-radius: 8px; border: 2px solid #3a424e; background: var(--cartao); color: var(--texto); }
+  input.endereco { margin-top: 6px; font-size: 13px; padding: 6px 8px; }
   button { margin-top: 8px; padding: 10px 16px; font-size: 17px; font-weight: bold; border: 0; border-radius: 8px; background: var(--foco); color: #1a1300; cursor: pointer; }
   button.secundario { background: #2a313c; color: var(--texto); }
   ul { list-style: none; padding: 0; margin: 0; }
@@ -65,14 +67,23 @@
     <p id="msg" class="msg" role="status"></p>
     <p class="dica">Suas listas entram como vieram, com as categorias delas. Depois de adicionar ou remover, a TV leva uns 5 minutos para atualizar os canais.</p>
 
-    <h2>Canais avulsos (arquivo .m3u)</h2>
-    <p class="dica"><strong>Atenção:</strong> os canais avulsos <strong>não passam pelo teste</strong> da TV. Eles aparecem sempre no topo da lista, mesmo quando estão fora do ar. Se um não abrir, o problema está no endereço do canal: apague e envie um arquivo novo.</p>
-    <p id="avulsos" class="dica"></p>
-    <label for="arquivo">Escolha um arquivo .m3u do celular ou do notebook. Ele substitui os canais avulsos que a TV já tem:</label>
-    <input id="arquivo" type="file" accept=".m3u,.m3u8,.txt">
-    <button id="enviar">Enviar</button>
-    <button id="apagar" class="secundario">Apagar canais avulsos</button>
+    <h2>Canais e filmes avulsos</h2>
+    <p class="dica"><strong>Atenção:</strong> os avulsos <strong>não passam pelo teste</strong> da TV. Eles aparecem sempre, mesmo quando estão fora do ar. Se um não abrir, o problema está no link: remova e adicione de novo.</p>
+    <label for="avTipo">Tipo:</label>
+    <select id="avTipo"><option value="canal">Canal ao vivo</option><option value="filme">Filme</option></select>
+    <label for="avNome">Nome:</label>
+    <input id="avNome" maxlength="80" autocomplete="off">
+    <label for="avLink">Link (começa com http:// ou https://):</label>
+    <input id="avLink" type="url" autocomplete="off" placeholder="https://...">
+    <label for="avCategoria">Categoria (opcional):</label>
+    <input id="avCategoria" maxlength="40" autocomplete="off" placeholder="Meus canais">
+    <button id="avAdicionar">Adicionar</button>
     <p id="msgAvulsos" class="msg" role="status"></p>
+    <ul id="avulsos"></ul>
+    <label for="arquivo">Ou envie um arquivo .m3u: os itens dele são <strong>acrescentados</strong> aos que a TV já tem (até 300 no total).</label>
+    <input id="arquivo" type="file" accept=".m3u,.m3u8,.txt">
+    <button id="enviar">Enviar arquivo</button>
+    <button id="apagar" class="secundario">Apagar todos os avulsos</button>
 
     <details id="blocoCategorias" class="bloco">
       <summary><h2>Categorias escondidas <span id="contaEscondidas" class="conta"></span></h2></summary>
@@ -111,7 +122,7 @@
   async function carregar() {
     const vez = ++vezes;
     const linhas = (await pedir('GET', '/listas')).split('\n').filter(Boolean);
-    const n = await pedir('GET', '/avulsos');
+    const linhasAv = (await pedir('GET', '/avulsos')).split('\n').filter(Boolean);
     const linhasCat = (await pedir('GET', '/categorias')).split('\n').filter(Boolean);
     const frases = (await pedir('GET', '/resumo')).split('\n').filter(Boolean);
     const registro = await pedir('GET', '/registro');
@@ -145,14 +156,55 @@
         try { await pedir('DELETE', '/listas/' + i); $('msg').textContent = 'Lista removida. A TV atualiza em uns 5 minutos.'; carregar(); }
         catch (e) { $('msg').textContent = e.message; }
       };
-      botoes.append(renomear, remover);
+      // Endereco completo (pode ter senha): so aparece quando a pessoa pede, num campo ja selecionado para copiar.
+      const copiar = document.createElement('button');
+      copiar.className = 'secundario';
+      copiar.textContent = 'Copiar endereço';
+      copiar.onclick = async () => {
+        const aberto = nome.querySelector('input.endereco');
+        if (aberto) { aberto.remove(); copiar.textContent = 'Copiar endereço'; return; }
+        try {
+          const campo = document.createElement('input');
+          campo.className = 'endereco';
+          campo.readOnly = true;
+          campo.value = await pedir('GET', '/listas/' + i + '/endereco');
+          nome.append(campo);
+          campo.select();
+          // A area de transferencia moderna nao funciona em http:// da rede local; o jeito antigo funciona.
+          const copiou = document.execCommand && document.execCommand('copy');
+          $('msg').textContent = copiou ? 'Endereço copiado.' : 'Selecione o endereço e copie (Ctrl+C).';
+          copiar.textContent = 'Esconder endereço';
+        } catch (e) { $('msg').textContent = e.message; }
+      };
+      botoes.append(copiar, renomear, remover);
       li.append(nome, botoes);
       return li;
     });
     if (!itens.length) itens.push(texto('Nenhuma lista. Adicione uma abaixo.'));
     $('listas').replaceChildren(...itens);
 
-    $('avulsos').textContent = n === '0' ? 'Nenhum canal avulso na TV.' : 'A TV tem ' + n + ' canais avulsos (sem teste).';
+    const avulsos = linhasAv.map((linha) => {
+      const [i, nomeAv, dominio, tipo, categoria] = linha.split('\t');
+      const li = document.createElement('li');
+      const nome = document.createElement('span');
+      nome.textContent = nomeAv;
+      const sub = document.createElement('span');
+      sub.className = 'tipo';
+      sub.textContent = (tipo === 'filme' ? 'Filme' : 'Canal') + ' · ' + categoria + ' · ' + dominio;
+      nome.append(sub);
+      const remover = document.createElement('button');
+      remover.className = 'secundario';
+      remover.textContent = 'Remover';
+      remover.onclick = async () => {
+        if (!confirm('Remover ' + nomeAv + '?')) return;
+        try { await pedir('DELETE', '/avulsos/' + i); $('msgAvulsos').textContent = 'Removido.'; carregar(); }
+        catch (e) { $('msgAvulsos').textContent = e.message; }
+      };
+      li.append(nome, remover);
+      return li;
+    });
+    if (!avulsos.length) avulsos.push(texto('Nenhum avulso na TV.'));
+    $('avulsos').replaceChildren(...avulsos);
 
     const caixas = linhasCat.map((linha) => {
       const [nome, escondida] = linha.split('\t');
@@ -233,6 +285,18 @@
     } catch (e) { $('msg').textContent = e.message; }
   };
 
+  $('avTipo').onchange = () => { $('avCategoria').placeholder = $('avTipo').value === 'filme' ? 'Meus filmes' : 'Meus canais'; };
+  $('avAdicionar').onclick = async () => {
+    const campos = [$('avTipo').value, $('avNome').value.trim(), $('avLink').value.trim(), $('avCategoria').value.trim()];
+    if (!campos[1] || !campos[2]) { $('msgAvulsos').textContent = 'Preencha o nome e o link.'; return; }
+    try {
+      await pedir('POST', '/avulsos/um', campos.join('\n'));
+      $('avNome').value = ''; $('avLink').value = ''; $('avCategoria').value = '';
+      $('msgAvulsos').textContent = campos[0] === 'filme' ? 'Filme adicionado: aparece em Filmes em até 1 minuto.' : 'Canal adicionado: aparece na lista em uns 5 minutos.';
+      await carregar();
+    } catch (e) { $('msgAvulsos').textContent = e.message; }
+  };
+
   $('enviar').onclick = async () => {
     const arquivo = $('arquivo').files[0];
     if (!arquivo) { $('msgAvulsos').textContent = 'Escolha um arquivo primeiro.'; return; }
@@ -240,16 +304,16 @@
     try {
       const r = await pedir('POST', '/avulsos', await arquivo.text());
       $('arquivo').value = '';
-      $('msgAvulsos').textContent = r + '. A TV atualiza em uns 5 minutos.';
+      $('msgAvulsos').textContent = r + '. Canais em uns 5 minutos, filmes em até 1 minuto.';
       await carregar();
     } catch (e) { $('msgAvulsos').textContent = e.message; }
   };
 
   $('apagar').onclick = async () => {
-    if (!confirm('Apagar todos os canais avulsos da TV?')) return;
+    if (!confirm('Apagar todos os canais e filmes avulsos da TV?')) return;
     try {
       await pedir('DELETE', '/avulsos');
-      $('msgAvulsos').textContent = 'Canais avulsos apagados. A TV atualiza em uns 5 minutos.';
+      $('msgAvulsos').textContent = 'Avulsos apagados. A TV atualiza em uns 5 minutos.';
       await carregar();
     } catch (e) { $('msgAvulsos').textContent = e.message; }
   };

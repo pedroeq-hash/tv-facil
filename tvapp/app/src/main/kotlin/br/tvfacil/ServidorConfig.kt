@@ -36,11 +36,11 @@ class ServidorConfig(private val context: Context, private val categorias: List<
             fontes = TesteJob.lerFontes(context),
             pagina = context.assets.open("config.html").bufferedReader().use { it.readText() },
             registro = { TesteJob.fimDoRegistro(context) },
-            avulsos = TesteJob.contarAvulsos(context),
+            avulsos = TesteJob.lerAvulsos(context),
             aoMudarAvulsos = { canais ->
                 TesteJob.salvarAvulsos(context, canais)
                 TesteJob.rodarAgora(context)
-                status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
+                status = "Avulsos salvos. Filmes aparecem em até 1 minuto; canais em uns 5 minutos."
             },
             categorias = { categorias },
             escondidas = Arquivos.lerEscondidas(context),

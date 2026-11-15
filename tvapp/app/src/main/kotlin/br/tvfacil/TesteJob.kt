@@ -8,9 +8,11 @@ import android.content.ComponentName
 import android.content.Context
 import br.tvfacil.core.Biblioteca
 import br.tvfacil.core.Canal
+import br.tvfacil.core.Capa
 import br.tvfacil.core.Destino
 import br.tvfacil.core.Fonte
 import br.tvfacil.core.Fontes
+import br.tvfacil.core.Item
 import br.tvfacil.core.M3uParser
 import br.tvfacil.core.Serie
 import br.tvfacil.core.TesteCanais
@@ -129,13 +131,12 @@ class TesteJob : JobService() {
         }
 
         // Canais avulsos: arquivo .m3u enviado pela pagina, ja filtrado pelo M3uParser (privado: links podem ter senha).
-        private fun arquivoAvulsos(context: Context) = File(context.filesDir, "extras.m3u")
+        fun arquivoAvulsos(context: Context) = File(context.filesDir, "extras.m3u")
 
         // Relido pelo M3uParser tambem aqui: o arquivo e reescrito por nos, mas o filtro e barato.
-        private fun lerAvulsos(context: Context): List<Canal> =
+        fun lerAvulsos(context: Context): List<Canal> =
             arquivoAvulsos(context).takeIf { it.exists() }?.let { M3uParser.parse(it.readText()) } ?: emptyList()
 
-        fun contarAvulsos(context: Context) = lerAvulsos(context).size
 
         /** Lista vazia apaga o arquivo. */
         fun salvarAvulsos(context: Context, canais: List<Canal>) {
@@ -182,7 +183,8 @@ class TesteJob : JobService() {
             }
             // Listas proprias entram sem teste: lista paga limita conexoes, e testar centenas de canais pode bloquear a conta.
             // Avulsos primeiro (como o extras.m3u do Termux), depois as listas proprias baixadas.
-            val avulsos = lerAvulsos(context)
+            // So os canais ao vivo: filmes avulsos vao para Filmes (BibliotecaLida).
+            val avulsos = lerAvulsos(context).filter { Biblioteca.classificar(it) is Item.AoVivo }
             val aoVivo = runCatching { M3uParser.parse(Arquivos.aoVivo(context).readText()) }.getOrDefault(emptyList())
             val proprias = avulsos + aoVivo
             val candidatos = TesteCanais.juntar(baixadas.map { it.second })
@@ -245,12 +247,13 @@ class TesteJob : JobService() {
                     .onEachIndexed { i, _ -> if (i % 1000 == 0) contexto.ensureActive() } // o Android cortou o job: para
                 val indice: List<Serie> = File(novo, "filmes.m3u").bufferedWriter().use { saida ->
                     saida.write("#EXTM3U\n")
-                    // Sem logo: ainda nao ha capas, e poupa memoria ao ler os 30 mil filmes.
-                    fun semCabecalho(cs: List<Canal>) = TesteCanais.m3u(cs.map { it.copy(logo = "") }).removePrefix("#EXTM3U\n")
+                    fun semCabecalho(cs: List<Canal>) = TesteCanais.m3u(cs).removePrefix("#EXTM3U\n")
                     Biblioteca.montar(M3uParser.ler(linhas), object : Destino {
                         override fun aoVivo(c: Canal) { aoVivo += c }
-                        override fun filme(c: Canal) { saida.write(semCabecalho(listOf(c))); filmes++ }
-                        override fun episodios(serie: Serie, eps: List<Canal>) = File(novo, "series/${serie.id}.m3u").appendText(semCabecalho(eps))
+                        // Capa so do filme, na versao pequena (Capa); episodio sem capa (a serie ja tem a dela no indice).
+                        override fun filme(c: Canal) { saida.write(semCabecalho(listOf(c.copy(logo = Capa.endereco(c.logo) ?: "")))); filmes++ }
+                        override fun episodios(serie: Serie, eps: List<Canal>) =
+                            File(novo, "series/${serie.id}.m3u").appendText(semCabecalho(eps.map { it.copy(logo = "") }))
                     })
                 }
                 File(novo, "series.tsv").writeText(Biblioteca.indice(indice))

@@ -26,4 +26,4 @@ object Arquivos {
 }
 
 /** A serie como cartao da grade e resultado da busca (url = id da serie). */
-fun Serie.comoCanal() = Canal(nome = nome, url = id.toString(), grupo = categoria, tipo = Tipo.SERIE)
+fun Serie.comoCanal() = Canal(nome = nome, url = id.toString(), grupo = categoria, logo = logo, tipo = Tipo.SERIE)

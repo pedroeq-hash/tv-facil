@@ -41,6 +41,7 @@ import br.tvfacil.core.M3uParser
 import br.tvfacil.core.Navegacao
 import br.tvfacil.core.Pulo
 import br.tvfacil.core.ResultadoTeste
+import br.tvfacil.core.Recentes
 import br.tvfacil.core.Retomar
 import br.tvfacil.core.Serie
 import br.tvfacil.core.Tipo
@@ -84,7 +85,13 @@ class MainActivity : ComponentActivity(), Acoes {
         val andamento = filmes.filter { it.url in emAndamento }
         (if (andamento.isEmpty()) emptyList() else listOf(Grupo(CONTINUAR, andamento))) + Catalogo.grupos(filmes, emptySet())
     }
-    private val gruposSeries by derivedStateOf { series.groupBy { it.categoria }.map { (cat, ss) -> Grupo(cat, ss.map { it.comoCanal() }) } }
+    private var seriesRecentes by mutableStateOf(emptyList<String>()) // chaveSerie das ultimas vistas, a mais recente primeiro
+    private val gruposSeries by derivedStateOf {
+        val porChave = series.associateBy(::chaveSerie)
+        val continuar = seriesRecentes.mapNotNull { porChave[it] } // escondida ou fora da lista nova: some daqui tambem
+        (if (continuar.isEmpty()) emptyList() else listOf(Grupo(CONTINUAR, continuar.map { it.comoCanal() }))) +
+            series.groupBy { it.categoria }.map { (cat, ss) -> Grupo(cat, ss.map { it.comoCanal() }) }
+    }
     private var serieAberta by mutableStateOf<Serie?>(null)
     private var temporadas by mutableStateOf(emptyList<Grupo>())
     private var grupoFilmes by mutableStateOf("")
@@ -114,6 +121,7 @@ class MainActivity : ComponentActivity(), Acoes {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // protetor de tela nao interrompe o video
         TesteJob.agendar(this) // testa os canais a cada 6 h (ver arquivoLista)
+        lifecycleScope.launch(Dispatchers.IO) { Capas.aparar(this@MainActivity) } // capas no disco: ate 50 MB
         // Lista nova (teste de 6 h ou lista adicionada pelo celular) aparece sem precisar sair do app.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -124,6 +132,7 @@ class MainActivity : ComponentActivity(), Acoes {
             }
         }
         favoritos = prefs.getStringSet("favoritos", emptySet())!!.toSet()
+        seriesRecentes = prefs.getString("series_recentes", "")!!.lines().filter { it.isNotEmpty() }
         player = VlcPlayer(
             this,
             aoTocar = {
@@ -287,7 +296,10 @@ class MainActivity : ComponentActivity(), Acoes {
             Camada.FILMES -> grupoFilmes = grupo
             Camada.SERIE -> {
                 temporadaAtual = grupo
-                serieAberta?.let { prefs.edit().putString(chaveSerie(it), canal.url).apply() }
+                serieAberta?.let {
+                    prefs.edit().putString(chaveSerie(it), canal.url).apply()
+                    guardarRecentes(Recentes.usar(seriesRecentes, chaveSerie(it)))
+                }
             }
             else -> Unit
         }
@@ -298,6 +310,11 @@ class MainActivity : ComponentActivity(), Acoes {
         salvoEm = 0
         camada = Camada.FILME
         abrir(canal, inicioSalvo(canal))
+    }
+
+    private fun guardarRecentes(lista: List<String>) {
+        seriesRecentes = lista
+        prefs.edit().putString("series_recentes", lista.joinToString("\n")).apply()
     }
 
     // Nome + categoria: o id da serie muda quando a lista e refeita, o nome nao.
@@ -340,6 +357,8 @@ class MainActivity : ComponentActivity(), Acoes {
         if (proximo != null) {
             assistirFilme(proximo, Camada.SERIE, temporadas.first { proximo in it.canais }.nome)
         } else {
+            // Serie vista ate o ultimo episodio: sai do "Continuar assistindo".
+            if (voltarPara == Camada.SERIE) serieAberta?.let { guardarRecentes(Recentes.tirar(seriesRecentes, chaveSerie(it))) }
             sairDoFilme()
             camada = voltarPara
         }
@@ -359,6 +378,12 @@ class MainActivity : ComponentActivity(), Acoes {
             ultimoVod = eps.firstOrNull { it.url == ultimo }
             temporadaAtual = temporadas.firstOrNull { t -> t.canais.any { it.url == ultimo } }?.nome ?: ""
             camada = Camada.SERIE
+            // "Continuar assistindo": ja toca o episodio onde parou; Voltar mostra a tela da serie para escolher outro.
+            // shortcut: se o ultimo foi visto ate o fim e a pessoa saiu antes do proximo comecar, ele recomeca do inicio.
+            if (grupo == CONTINUAR) {
+                val alvo = ultimoVod ?: temporadas.firstOrNull()?.canais?.firstOrNull() ?: return@launch
+                assistirFilme(alvo, Camada.SERIE, temporadas.first { alvo in it.canais }.nome)
+            }
         }
     }
 
@@ -423,7 +448,10 @@ class MainActivity : ComponentActivity(), Acoes {
     private var bibliotecaLidaEm = emptyList<Long>()
     // Inclui as categorias escondidas: mudou na pagina, rele (em ate 1 min).
     private fun marcaBiblioteca() =
-        listOf(Arquivos.filmes(this).lastModified(), Arquivos.series(this).lastModified(), Arquivos.escondidas(this).lastModified())
+        listOf(
+            Arquivos.filmes(this).lastModified(), Arquivos.series(this).lastModified(), Arquivos.escondidas(this).lastModified(),
+            TesteJob.arquivoAvulsos(this).lastModified(), // filme avulso novo aparece em ate 1 min
+        )
 
     /**
      * Le filmes e series so quando os arquivos mudam; a leitura fica no processo (BibliotecaLida), entao fechar e

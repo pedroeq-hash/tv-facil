@@ -12,9 +12,14 @@ class PainelTest {
     private var avulsosSalvos: List<Canal>? = null
     private var escondidasSalvas: List<String>? = null
     private val publica = Fonte("https://iptv-org.github.io/iptv/countries/br.m3u", false)
+    // Dois avulsos que a TV ja tem, com usuario e senha no link (como nas listas pagas).
+    private val avulsosIniciais = listOf(
+        Canal("Canal A", "http://srv.com:8080/joao/segredo/a", "Globo"),
+        Canal("Filme B", "http://srv.com/movie/joao/segredo/b.mp4", "Meus filmes", tipo = Tipo.FILME),
+    )
     private val painel = Painel(
         endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "<html>pagina</html>",
-        registro = { "2026-11-15 06:51:00 inicio da rodada\n  falhou: x.com - HTTP 404" }, avulsos = 2, aoMudarAvulsos = { avulsosSalvos = it },
+        registro = { "2026-11-15 06:51:00 inicio da rodada\n  falhou: x.com - HTTP 404" }, avulsos = avulsosIniciais, aoMudarAvulsos = { avulsosSalvos = it },
     ) { salvas = it }
 
     // Arquivo .m3u com n canais; por padrao com usuario e senha no link, como nas listas pagas.
@@ -92,31 +97,69 @@ class PainelTest {
     }
 
     @Test
-    fun `recebe o arquivo m3u, conta os canais e nao devolve a senha`() {
-        assertEquals("2", painel.responder(comToken("GET", "/avulsos")).corpo)
-        val r = painel.responder(comToken("POST", "/avulsos", m3u(9)))
-        assertEquals(200 to "9 canais salvos", r.codigo to r.corpo)
-        assertEquals(9, avulsosSalvos!!.size)
-        assertEquals("Canal 1", avulsosSalvos!![0].nome)
-        assertEquals("9", painel.responder(comToken("GET", "/avulsos")).corpo)
+    fun `lista os avulsos sem devolver a senha`() {
+        assertEquals(
+            "0\tCanal A\tsrv.com\tcanal\tGlobo\n1\tFilme B\tsrv.com\tfilme\tMeus filmes\n",
+            painel.responder(comToken("GET", "/avulsos")).corpo,
+        )
         assertFalse(listOf("/avulsos", "/listas", "/registro").any { "segredo" in painel.responder(comToken("GET", it)).corpo })
     }
 
     @Test
-    fun `arquivo sem canal valido ou com canais demais e recusado e nada muda`() {
-        assertEquals(400, painel.responder(comToken("POST", "/avulsos", "")).codigo)
-        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(3) { "file:///sdcard/$it.ts" })).codigo)
-        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(301))).codigo)
-        assertNull(avulsosSalvos)
-        assertEquals("2", painel.responder(comToken("GET", "/avulsos")).corpo)
-        assertEquals(200, painel.responder(comToken("POST", "/avulsos", m3u(300))).codigo)
+    fun `arquivo m3u acrescenta aos avulsos, sem repetir link`() {
+        val r = painel.responder(comToken("POST", "/avulsos", m3u(9)))
+        assertEquals(200 to "9 acrescentados", r.codigo to r.corpo)
+        assertEquals(11, avulsosSalvos!!.size)
+        assertEquals("Canal A", avulsosSalvos!![0].nome)
+        assertEquals("Canal 1", avulsosSalvos!![2].nome)
+        assertEquals(200 to "0 acrescentados", painel.responder(comToken("POST", "/avulsos", m3u(9))).let { it.codigo to it.corpo })
+        assertEquals(11, avulsosSalvos!!.size)
     }
 
     @Test
-    fun `apagar limpa os canais avulsos`() {
+    fun `arquivo sem canal valido ou que passa de 300 e recusado e nada muda`() {
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", "")).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(3) { "file:///sdcard/$it.ts" })).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(299))).codigo) // 2 + 299 = 301
+        assertNull(avulsosSalvos)
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos", m3u(298))).codigo)
+    }
+
+    @Test
+    fun `um canal ou filme por vez, com categoria padrao`() {
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "canal\nGlobo SE\nhttps://x.com/globo.m3u8\n")).codigo)
+        assertEquals(Canal("Globo SE", "https://x.com/globo.m3u8", "Meus canais"), avulsosSalvos!!.last())
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "filme\nTitanic (1997)\nhttps://x.com/t.mp4\nDra\"ma")).codigo)
+        assertEquals(Canal("Titanic (1997)", "https://x.com/t.mp4", "Drama", tipo = Tipo.FILME), avulsosSalvos!!.last())
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "filme\nOutro\nhttps://x.com/o.mp4\n")).codigo)
+        assertEquals("Meus filmes", avulsosSalvos!!.last().grupo)
+    }
+
+    @Test
+    fun `um por vez - link ruim, sem nome, repetido ou sem o token e recusado`() {
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos/um", "canal\nX\nfile:///sdcard/a.ts\n")).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos/um", "canal\n \nhttps://x.com/a.m3u8\n")).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos/um", "canal\nDe novo\nhttp://srv.com:8080/joao/segredo/a\n")).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos/um", "outro\nX\nhttps://x.com/a.m3u8\n")).codigo)
+        assertEquals(401, painel.responder(pedido("POST", "/avulsos/um", "canal\nX\nhttps://x.com/a.m3u8\n")).codigo)
+        assertNull(avulsosSalvos)
+    }
+
+    @Test
+    fun `remove um avulso pelo numero ou apaga todos`() {
+        assertEquals(200, painel.responder(comToken("DELETE", "/avulsos/0")).codigo)
+        assertEquals(listOf("Filme B"), avulsosSalvos!!.map { it.nome })
+        assertEquals(404, painel.responder(comToken("DELETE", "/avulsos/5")).codigo)
         assertEquals(200, painel.responder(comToken("DELETE", "/avulsos")).codigo)
         assertEquals(emptyList(), avulsosSalvos)
-        assertEquals("0", painel.responder(comToken("GET", "/avulsos")).corpo)
+        assertEquals("", painel.responder(comToken("GET", "/avulsos")).corpo)
+    }
+
+    @Test
+    fun `endereco completo da lista so com o token`() {
+        assertEquals(401, painel.responder(pedido("GET", "/listas/0/endereco")).codigo)
+        assertEquals("https://iptv-org.github.io/iptv/countries/br.m3u", painel.responder(comToken("GET", "/listas/0/endereco")).corpo)
+        assertEquals(404, painel.responder(comToken("GET", "/listas/9/endereco")).codigo)
     }
 
     @Test
@@ -137,7 +180,7 @@ class PainelTest {
     fun `categorias escondidas - mostra todas com a marca e salva a escolha, so com o token`() {
         val p = Painel(
             endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "", registro = { "" },
-            avulsos = 0, aoMudarAvulsos = {}, categorias = { listOf("NETFLIX", "BRASIL PARALELO") },
+            avulsos = emptyList(), aoMudarAvulsos = {}, categorias = { listOf("NETFLIX", "BRASIL PARALELO") },
             escondidas = Escondidas.PADRAO, aoMudarEscondidas = { escondidasSalvas = it },
         ) {}
         assertEquals(401, p.responder(pedido("GET", "/categorias")).codigo)

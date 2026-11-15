@@ -7,7 +7,7 @@ sealed interface Item {
 }
 
 /** id = nome do arquivo dos episodios (series/<id>.m3u): gerado pelo app, nunca vem da lista. */
-data class Serie(val id: Int, val nome: String, val categoria: String, val episodios: Int)
+data class Serie(val id: Int, val nome: String, val categoria: String, val episodios: Int, val logo: String = "")
 
 /** Quem grava (no app: arquivos em filesDir). */
 interface Destino {
@@ -40,6 +40,7 @@ object Biblioteca {
                     series.size.also { ids[chave] = it; series += Serie(it, item.serie, item.canal.grupo, 0) }
                 } else continue
                 if (series[id].episodios >= MAX_EPISODIOS) continue
+                if (series[id].logo.isEmpty()) Capa.endereco(item.canal.logo)?.let { series[id] = series[id].copy(logo = it) }
                 if (id != blocoId) { fechar(); blocoId = id }
                 bloco += item.canal
                 series[id] = series[id].copy(episodios = series[id].episodios + 1)
@@ -82,13 +83,14 @@ object Biblioteca {
     fun temporadas(episodios: List<Canal>): List<Grupo> =
         episodios.groupBy { temporada(it.nome) }.toSortedMap().map { (t, eps) -> Grupo("Temporada $t", eps.sortedBy { numero(it.nome) }) }
 
-    fun indice(series: List<Serie>) = series.joinToString("") { "${it.id}\t${it.categoria}\t${it.nome}\t${it.episodios}\n" }
+    // 5a coluna (capa) desde a 0.30; o indice antigo, de 4 colunas, continua valendo ate a biblioteca ser refeita.
+    fun indice(series: List<Serie>) = series.joinToString("") { "${it.id}\t${it.categoria}\t${it.nome}\t${it.episodios}\t${it.logo}\n" }
 
     fun lerIndice(texto: String): List<Serie> = texto.lineSequence().mapNotNull { linha ->
         val p = linha.split('\t')
         val id = p.getOrNull(0)?.toIntOrNull()
         val episodios = p.getOrNull(3)?.toIntOrNull()
-        if (p.size != 4 || id == null || id < 0 || episodios == null) null else Serie(id, p[2], p[1], episodios)
+        if (p.size !in 4..5 || id == null || id < 0 || episodios == null) null else Serie(id, p[2], p[1], episodios, p.getOrElse(4) { "" })
     }.toList()
 }
 

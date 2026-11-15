@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -202,18 +203,18 @@ fun Tela(
             Camada.BUSCA -> BuscaCanais(indiceCanais, vod.indiceSeries, vod.indiceFilmes, termo, canal, acoes)
             Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
             // Categorias que o app ja tem na memoria (as escondidas o Painel acrescenta): ler os 30 mil filmes do disco levava 13 s.
-            Camada.CONFIGURAR -> Configurar(vod.gruposFilmes.map { it.nome }.filter { it != CONTINUAR } + vod.gruposSeries.map { it.nome })
+            Camada.CONFIGURAR -> Configurar((vod.gruposFilmes + vod.gruposSeries).map { it.nome }.filter { it != CONTINUAR })
             Camada.FILMES, Camada.SERIES -> if (vod.carregando && vod.gruposFilmes.isEmpty() && vod.gruposSeries.isEmpty()) {
                 Aviso("Carregando filmes e séries…\n\nAparecem sozinhos em alguns segundos.")
             } else if (camada == Camada.FILMES) GradeCanais(
                 "Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null,
-                busca = BuscaGrade(vod.termo, "buscar filme", vod.indiceFilmes, acoes::mudarTermoGrade),
+                busca = BuscaGrade(vod.termo, "buscar filme", vod.indiceFilmes, acoes::mudarTermoGrade), poster = true,
             ) { c, g ->
                 acoes.assistirFilme(c, Camada.FILMES, g)
             }
             else GradeCanais(
                 "Séries", vod.gruposSeries, vod.grupoSeries, vod.serie?.comoCanal(), selo = null,
-                busca = BuscaGrade(vod.termo, "buscar série", vod.indiceSeries, acoes::mudarTermoGrade),
+                busca = BuscaGrade(vod.termo, "buscar série", vod.indiceSeries, acoes::mudarTermoGrade), poster = true,
             ) { c, g ->
                 acoes.abrirSerie(c, g)
             }
@@ -518,6 +519,7 @@ private fun GradeCanais(
     selo: String? = "NO AR",
     sigla: (Canal) -> String = { Catalogo.sigla(it.nome) },
     busca: BuscaGrade? = null,
+    poster: Boolean = false, // filmes e series: capa em pe, 6 por fileira
     aoEscolher: (Canal, String) -> Unit,
 ) {
     if (grupos.isEmpty()) return
@@ -580,7 +582,7 @@ private fun GradeCanais(
             Text(grupo.nome, color = TEXTO, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (buscando && resultados.isEmpty()) Text("Nada com “${termo.trim()}”", color = CINZA, fontSize = 16.sp)
             LazyVerticalGrid(
-                GridCells.Fixed(4),
+                GridCells.Fixed(if (poster) 6 else 4),
                 state = rolagem,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(4.dp),
@@ -589,9 +591,10 @@ private fun GradeCanais(
             ) {
                 items(grupo.canais.size) { i ->
                     val c = grupo.canais[i]
-                    CartaoCanal(c, sigla(c), if (c == atual) selo else null, if (i == alvo) Modifier.focusRequester(foco) else Modifier) {
-                        aoEscolher(c, if (buscando) c.grupo else grupo.nome) // resultado: volta para a categoria certa
-                    }
+                    val focoInicial = if (i == alvo) Modifier.focusRequester(foco) else Modifier
+                    val escolher = { aoEscolher(c, if (buscando) c.grupo else grupo.nome) } // resultado: volta para a categoria certa
+                    if (poster) CartaoPoster(c, sigla(c), if (c == atual) selo else null, focoInicial, escolher)
+                    else CartaoCanal(c, sigla(c), if (c == atual) selo else null, focoInicial, escolher)
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -600,6 +603,33 @@ private fun GradeCanais(
                 Dica("Voltar", "fechar", 12.sp)
             }
         }
+    }
+}
+
+// Capa 2:3 com o nome embaixo (desliza quando em foco); sem capa, a sigla no lugar. Foco = borda amarela, sem aumentar.
+@Composable
+private fun CartaoPoster(canal: Canal, sigla: String, selo: String?, focoInicial: Modifier, onClick: () -> Unit) {
+    var focado by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Surface(
+            onClick = onClick,
+            modifier = focoInicial.fillMaxWidth().aspectRatio(2f / 3f).onFocusChanged { focado = it.isFocused },
+            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+            colors = ClickableSurfaceDefaults.colors(containerColor = CARTAO, contentColor = TEXTO, focusedContainerColor = SELO, focusedContentColor = TEXTO),
+            border = ClickableSurfaceDefaults.border(focusedBorder = Border(BorderStroke(3.dp, FOCO))),
+            scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        ) {
+            Box(Modifier.fillMaxSize()) {
+                Capa(canal.logo, Modifier.fillMaxSize()) {
+                    Text(sigla, color = if (focado) FOCO else CINZA, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                }
+                if (selo != null) NoAr(Modifier.align(Alignment.TopEnd).padding(4.dp), selo)
+            }
+        }
+        Text(
+            canal.nome, color = if (focado) TEXTO else CINZA, fontSize = 12.sp, fontWeight = if (focado) FontWeight.Bold else null, maxLines = 1,
+            overflow = if (focado) TextOverflow.Clip else TextOverflow.Ellipsis, modifier = if (focado) Modifier.passando() else Modifier,
+        )
     }
 }
 

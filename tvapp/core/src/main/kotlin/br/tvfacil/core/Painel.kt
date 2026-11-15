@@ -15,7 +15,7 @@ class Painel(
     fontes: List<Fonte>,
     private val pagina: String,
     private val registro: () -> String,
-    avulsos: Int, // quantos canais avulsos a TV ja tem
+    avulsos: List<Canal>, // canais e filmes avulsos que a TV ja tem
     private val aoMudarAvulsos: (List<Canal>) -> Unit,
     private val categorias: () -> List<String> = { emptyList() }, // de filmes e series (lidas so quando a pagina pede)
     escondidas: List<String> = Escondidas.PADRAO,
@@ -84,14 +84,44 @@ class Painel(
             }
             p.metodo == "GET" && p.caminho == "/registro" -> texto(200, registro())
             p.metodo == "GET" && p.caminho == "/resumo" -> texto(200, Resumo.simples(registro()).joinToString("\n"))
-            // Canais avulsos: arquivo .m3u enviado pela pagina; so a quantidade volta (os links podem ter senha).
-            p.metodo == "GET" && p.caminho == "/avulsos" -> texto(200, avulsos.toString())
+            // Endereco completo de uma lista (pode ter senha): so pela pagina, depois do PIN, para quem ja pode troca-la.
+            p.metodo == "GET" && p.caminho.startsWith("/listas/") && p.caminho.endsWith("/endereco") -> {
+                val i = p.caminho.removePrefix("/listas/").removeSuffix("/endereco").toIntOrNull()
+                if (i == null || i !in fontes.indices) return texto(404, "lista nao encontrada")
+                texto(200, fontes[i].url)
+            }
+            // Avulsos: canais e filmes que entram sem lista. Volta so nome, dominio, tipo e categoria (o link pode ter senha).
+            p.metodo == "GET" && p.caminho == "/avulsos" -> texto(200, avulsos.withIndex().joinToString("") { (i, c) ->
+                "$i\t${c.nome}\t${TesteCanais.dominio(c.url)}\t${if (c.tipo == Tipo.FILME) "filme" else "canal"}\t${c.grupo}\n"
+            })
             p.metodo == "POST" && p.caminho == "/avulsos" -> {
                 val canais = M3uParser.parse(p.corpo)
                 if (canais.isEmpty()) return texto(400, "nenhum canal valido no arquivo (so links http:// ou https://)")
-                if (canais.size > MAX_AVULSOS) return texto(400, "canais demais: no maximo $MAX_AVULSOS")
-                mudarAvulsos(canais)
-                texto(200, "${canais.size} canais salvos")
+                val novos = canais.distinctBy { it.url }.filter { c -> avulsos.none { it.url == c.url } }
+                if (avulsos.size + novos.size > MAX_AVULSOS) return texto(400, "passaria de $MAX_AVULSOS avulsos: apague alguns antes")
+                mudarAvulsos(avulsos + novos)
+                texto(200, "${novos.size} acrescentados")
+            }
+            // Um so: "tipo\nnome\nlink\ncategoria". Vira uma entrada M3U e passa pelo M3uParser (mesma validacao do arquivo).
+            p.metodo == "POST" && p.caminho == "/avulsos/um" -> {
+                val (tipo, nome, link, categoria) = (p.corpo.lines() + List(4) { "" }).map { it.trim() }
+                if (tipo != "canal" && tipo != "filme") return texto(400, "tipo deve ser canal ou filme")
+                val padrao = if (tipo == "filme") "Meus filmes" else "Meus canais"
+                val grupo = categoria.replace("\"", "").ifBlank { padrao }
+                val etiqueta = if (tipo == "filme") " tipo=\"filme\"" else ""
+                val canal = M3uParser.parse("#EXTINF:-1$etiqueta group-title=\"$grupo\",$nome\n$link\n").singleOrNull()
+                    ?: return texto(400, "link nao aceito: use http:// ou https://")
+                if (canal.nome.isBlank()) return texto(400, "falta o nome")
+                if (avulsos.any { it.url == canal.url }) return texto(400, "esse link ja esta nos avulsos")
+                if (avulsos.size >= MAX_AVULSOS) return texto(400, "ja tem $MAX_AVULSOS avulsos: apague alguns antes")
+                mudarAvulsos(avulsos + canal)
+                texto(200, "ok")
+            }
+            p.metodo == "DELETE" && p.caminho.startsWith("/avulsos/") -> {
+                val i = p.caminho.removePrefix("/avulsos/").toIntOrNull()
+                if (i == null || i !in avulsos.indices) return texto(404, "avulso nao encontrado")
+                mudarAvulsos(avulsos.filterIndexed { j, _ -> j != i })
+                texto(200, "ok")
             }
             p.metodo == "DELETE" && p.caminho == "/avulsos" -> {
                 mudarAvulsos(emptyList())
@@ -109,7 +139,7 @@ class Painel(
     private fun mudarNome(i: Int, nome: String) = mudar(fontes.mapIndexed { j, f -> if (j == i) f.copy(nome = nome) else f })
 
     private fun mudarAvulsos(canais: List<Canal>) {
-        avulsos = canais.size
+        avulsos = canais
         aoMudarAvulsos(canais)
     }
 
