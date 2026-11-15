@@ -200,7 +200,8 @@ fun Tela(
             Camada.LISTA -> ListaCanais(grupos, grupoAtual, canal, acoes)
             Camada.BUSCA -> BuscaCanais(indiceCanais, vod.indiceSeries, vod.indiceFilmes, termo, canal, acoes)
             Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
-            Camada.CONFIGURAR -> Configurar()
+            // Categorias que o app ja tem na memoria (as escondidas o Painel acrescenta): ler os 30 mil filmes do disco levava 13 s.
+            Camada.CONFIGURAR -> Configurar(vod.gruposFilmes.map { it.nome }.filter { it != CONTINUAR } + vod.gruposSeries.map { it.nome })
             Camada.FILMES -> GradeCanais(
                 "Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null,
                 busca = BuscaGrade(vod.termo, "buscar filme", vod.indiceFilmes, acoes::mudarTermoGrade),
@@ -659,9 +660,9 @@ private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, temFilmes: 
 
 // Enquanto esta tela esta aberta, a TV aceita a configuracao pelo navegador do celular (PIN). Fechou, fechou a porta.
 @Composable
-private fun Configurar() {
+private fun Configurar(categorias: List<String>) {
     val context = LocalContext.current
-    val servidor = remember { ServidorConfig(context) }
+    val servidor = remember { ServidorConfig(context, categorias) }
     DisposableEffect(Unit) {
         servidor.iniciar()
         onDispose { servidor.parar() }

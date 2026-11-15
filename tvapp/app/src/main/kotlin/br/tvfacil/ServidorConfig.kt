@@ -18,14 +18,13 @@ import kotlin.concurrent.thread
  * Servidor da pagina de configuracao. So existe enquanto a tela "Configurar" esta aberta:
  * fechou a tela, fechou a porta. Regras: docs/plano-tvapp.md, Fase 7. A logica (e os testes) ficam no Painel (:core).
  */
-class ServidorConfig(private val context: Context) {
+class ServidorConfig(private val context: Context, private val categorias: List<String>) {
     val ip: String? = ipDaRede()
     private val sorte = SecureRandom()
     val pin = "%06d".format(sorte.nextInt(1_000_000))
     var status by mutableStateOf("Aguardando o aparelho…")
         private set
     private var porta: ServerSocket? = null
-    private val categorias by lazy { Arquivos.categorias(context) }
 
     fun iniciar() {
         val ip = ip ?: return
@@ -43,7 +42,7 @@ class ServidorConfig(private val context: Context) {
                 TesteJob.rodarAgora(context)
                 status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
             },
-            categorias = { categorias }, // lidas 1 vez por sessao: sao 30 mil filmes, e a pagina recarrega a cada acao
+            categorias = { categorias },
             escondidas = Arquivos.lerEscondidas(context),
             aoMudarEscondidas = { categorias ->
                 Arquivos.salvarEscondidas(context, categorias)

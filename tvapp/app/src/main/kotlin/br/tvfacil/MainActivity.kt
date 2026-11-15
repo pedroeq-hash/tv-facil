@@ -53,6 +53,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 private const val TECLA_VELHA_MS = 700L
+const val CONTINUAR = "Continuar assistindo" // grupo do app, nao e categoria da lista
 
 class MainActivity : ComponentActivity(), Acoes {
     private lateinit var player: VlcPlayer
@@ -79,7 +80,7 @@ class MainActivity : ComponentActivity(), Acoes {
     private var emAndamento by mutableStateOf(emptySet<String>()) // URLs com "continuar de onde parou"
     private val gruposFilmes by derivedStateOf {
         val andamento = filmes.filter { it.url in emAndamento }
-        (if (andamento.isEmpty()) emptyList() else listOf(Grupo("Continuar assistindo", andamento))) + Catalogo.grupos(filmes, emptySet())
+        (if (andamento.isEmpty()) emptyList() else listOf(Grupo(CONTINUAR, andamento))) + Catalogo.grupos(filmes, emptySet())
     }
     private val gruposSeries by derivedStateOf { series.groupBy { it.categoria }.map { (cat, ss) -> Grupo(cat, ss.map { it.comoCanal() }) } }
     private var serieAberta by mutableStateOf<Serie?>(null)

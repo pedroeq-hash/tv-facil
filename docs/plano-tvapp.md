@@ -191,6 +191,7 @@ A tela carrega só os filmes e o índice das séries. Os episódios de uma séri
   - O padrão já esconde "BRASIL PARALELO". As escolhas ficam em `filesDir/escondidas.txt`, fora da biblioteca, que é refeita todo dia.
   - A comparação ignora maiúsculas e acentos e vale para a categoria inteira (`Escondidas`, `:core`, com testes).
   - O app filtra na leitura (grade, busca, "Continuar assistindo") e relê em até 1 min. Nada é baixado de novo.
+  - A página recebe as categorias que o app já tem na memória (0.29). Ler os 30 mil filmes do disco levava 13 s, e a seção parecia vazia.
 - **Job diário (ID 3):** não baixa a lista de novo se a biblioteca tem menos de 20 h. Antes, ele rodava logo depois do ID 4. Quando o Android interrompe um job, o registro passa a dizer "interrompida pelo Android"; antes aparecia o nome embaralhado pelo R8.
 
 **Ordem sugerida:**
