@@ -66,7 +66,7 @@ class PainelTest {
     fun `lista as fontes mostrando so o dominio`() {
         painel.responder(comToken("POST", "/listas", "http://meu.servidor.com:8080/get.php?u=joao&p=segredo"))
         val corpo = painel.responder(comToken("GET", "/listas")).corpo
-        assertEquals("0\tiptv-org.github.io\tpublica\t\n1\tmeu.servidor.com\tpropria\t\n", corpo)
+        assertEquals("0\tiptv-org.github.io\tpublica\t\t1\n1\tmeu.servidor.com\tpropria\t\t1\n", corpo)
         assertFalse("segredo" in corpo || "joao" in corpo)
     }
 
@@ -156,6 +156,19 @@ class PainelTest {
     }
 
     @Test
+    fun `lista propria pode ficar so com filmes e series (sem canais ao vivo)`() {
+        painel.responder(comToken("POST", "/listas", "https://ok.com/a.m3u\nVOD"))
+        assertEquals(401, painel.responder(pedido("PUT", "/listas/1/aovivo", "0")).codigo)
+        assertEquals(200, painel.responder(comToken("PUT", "/listas/1/aovivo", "0")).codigo)
+        assertEquals(Fonte("https://ok.com/a.m3u", true, "VOD", aoVivo = false), salvas!![1])
+        assertTrue(painel.responder(comToken("GET", "/listas")).corpo.endsWith("1\tok.com\tpropria\tVOD\t0\n"))
+        assertEquals(200, painel.responder(comToken("PUT", "/listas/1/aovivo", "1")).codigo)
+        assertEquals(true, salvas!![1].aoVivo)
+        assertEquals(400, painel.responder(comToken("PUT", "/listas/0/aovivo", "0")).codigo) // publica: so tem canais
+        assertEquals(404, painel.responder(comToken("PUT", "/listas/9/aovivo", "0")).codigo)
+    }
+
+    @Test
     fun `endereco completo da lista so com o token`() {
         assertEquals(401, painel.responder(pedido("GET", "/listas/0/endereco")).codigo)
         assertEquals("https://iptv-org.github.io/iptv/countries/br.m3u", painel.responder(comToken("GET", "/listas/0/endereco")).corpo)
@@ -198,7 +211,7 @@ class PainelTest {
         assertEquals(200, painel.responder(comToken("PUT", "/listas/0", "Públicas BR")).codigo)
         assertEquals("Públicas BR", salvas!![0].nome)
         assertEquals(
-            "0\tiptv-org.github.io\tpublica\tPúblicas BR\n1\tok.com\tpropria\tLista do João\n",
+            "0\tiptv-org.github.io\tpublica\tPúblicas BR\t1\n1\tok.com\tpropria\tLista do João\t1\n",
             painel.responder(comToken("GET", "/listas")).corpo,
         )
         assertEquals(404, painel.responder(comToken("PUT", "/listas/9", "x")).codigo)

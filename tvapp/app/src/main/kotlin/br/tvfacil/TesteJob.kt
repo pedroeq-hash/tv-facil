@@ -243,13 +243,21 @@ class TesteJob : JobService() {
                 val aoVivo = mutableListOf<Canal>()
                 var filmes = 0
                 val contexto = currentCoroutineContext()
-                val linhas = sequence { for (a in baixados) a.bufferedReader().use { yieldAll(it.lineSequence()) } }
+                // listaAtual: de qual lista vem o que esta sendo lido (a sequencia e lida em ordem, um arquivo por vez);
+                // o canal sai do M3uParser ao ler a linha do link, ainda dentro do arquivo dele.
+                var listaAtual = proprias.firstOrNull()
+                val linhas = sequence {
+                    for ((fonte, a) in proprias.zip(baixados)) {
+                        listaAtual = fonte
+                        a.bufferedReader().use { yieldAll(it.lineSequence()) }
+                    }
+                }
                     .onEachIndexed { i, _ -> if (i % 1000 == 0) contexto.ensureActive() } // o Android cortou o job: para
                 val indice: List<Serie> = File(novo, "filmes.m3u").bufferedWriter().use { saida ->
                     saida.write("#EXTM3U\n")
                     fun semCabecalho(cs: List<Canal>) = TesteCanais.m3u(cs).removePrefix("#EXTM3U\n")
                     Biblioteca.montar(M3uParser.ler(linhas), object : Destino {
-                        override fun aoVivo(c: Canal) { aoVivo += c }
+                        override fun aoVivo(c: Canal) { if (listaAtual?.aoVivo != false) aoVivo += c } // "so filmes e series": pula
                         // Capa so do filme, na versao pequena (Capa); episodio sem capa (a serie ja tem a dela no indice).
                         override fun filme(c: Canal) { saida.write(semCabecalho(listOf(c.copy(logo = Capa.endereco(c.logo) ?: "")))); filmes++ }
                         override fun episodios(serie: Serie, eps: List<Canal>) =

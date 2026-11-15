@@ -49,9 +49,9 @@ class ServidorConfig(private val context: Context, private val categorias: List<
                 status = "Categorias escondidas salvas. A TV atualiza em até 1 minuto."
             },
         ) { novas ->
-            val enderecosAntes = TesteJob.lerFontes(context).map { it.url }
+            val antes = TesteJob.lerFontes(context).map { it.url to it.aoVivo }
             TesteJob.salvarFontes(context, novas)
-            if (novas.map { it.url } == enderecosAntes) { // so mudou o nome: nada a baixar
+            if (novas.map { it.url to it.aoVivo } == antes) { // so mudou o nome: nada a baixar
                 status = "Nome da lista salvo."
                 return@Painel
             }

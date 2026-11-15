@@ -6,10 +6,10 @@ import java.net.URI
  * Uma lista M3U de onde vem os canais. propria = do usuario (pode ter senha): entra sem teste e com os grupos dela.
  * nome: dado pelo usuario na pagina de configuracao (vazio = a pagina mostra so o site).
  */
-data class Fonte(val url: String, val propria: Boolean, val nome: String = "")
+data class Fonte(val url: String, val propria: Boolean, val nome: String = "", val aoVivo: Boolean = true) // aoVivo=false: so filmes e series
 
 /**
- * As listas guardadas no app (arquivo privado), uma por linha: "T url" = publica testada, "P url" = propria,
+ * As listas guardadas no app (arquivo privado), uma por linha: "T url" = publica testada, "P url" = propria, "V url" = propria so com filmes e series,
  * seguidas de tab + nome, se houver (a URL nunca tem tab: o formato recusa espacos).
  */
 object Fontes {
@@ -24,12 +24,13 @@ object Fontes {
             !urlAceita(url) -> null
             linha.startsWith("T ") -> Fonte(url, propria = false, nome)
             linha.startsWith("P ") -> Fonte(url, propria = true, nome)
+            linha.startsWith("V ") -> Fonte(url, propria = true, nome, aoVivo = false) // propria, sem os canais ao vivo
             else -> null
         }
     } ?: PADRAO
 
     fun escrever(fontes: List<Fonte>) = fontes.joinToString("") {
-        "${if (it.propria) "P" else "T"} ${it.url}${if (it.nome.isEmpty()) "" else "\t" + nome(it.nome)}\n"
+        "${if (!it.propria) "T" else if (it.aoVivo) "P" else "V"} ${it.url}${if (it.nome.isEmpty()) "" else "\t" + nome(it.nome)}\n"
     }
 
     /** Nome vindo da pagina (nao confiavel): sem caracteres de controle/invisiveis (inclui tab e quebra de linha), ate 40. */

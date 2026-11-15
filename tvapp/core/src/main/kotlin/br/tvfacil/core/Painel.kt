@@ -49,7 +49,7 @@ class Painel(
         if (!igual(p.cabecalhos["x-token"] ?: "", token)) return texto(401, "digite o PIN de novo")
         return when {
             p.metodo == "GET" && p.caminho == "/listas" -> texto(200, fontes.withIndex().joinToString("") { (i, f) ->
-                "$i\t${TesteCanais.dominio(f.url)}\t${if (f.propria) "propria" else "publica"}\t${f.nome}\n"
+                "$i\t${TesteCanais.dominio(f.url)}\t${if (f.propria) "propria" else "publica"}\t${f.nome}\t${if (f.aoVivo) 1 else 0}\n"
             })
             // Corpo: URL na 1a linha, nome (opcional) na 2a.
             p.metodo == "POST" && p.caminho == "/listas" -> {
@@ -57,6 +57,14 @@ class Painel(
                 if (!Fontes.urlAceita(url)) return texto(400, "endereco nao aceito: use http:// ou https:// da internet")
                 val nome = Fontes.nome(p.corpo.lines().getOrElse(1) { "" })
                 if (fontes.none { it.url == url }) mudar(fontes + Fonte(url, propria = true, nome))
+                texto(200, "ok")
+            }
+            // Lista propria: "1" inclui os canais ao vivo dela, "0" deixa so filmes e series.
+            p.metodo == "PUT" && p.caminho.startsWith("/listas/") && p.caminho.endsWith("/aovivo") -> {
+                val i = p.caminho.removePrefix("/listas/").removeSuffix("/aovivo").toIntOrNull()
+                if (i == null || i !in fontes.indices) return texto(404, "lista nao encontrada")
+                if (!fontes[i].propria) return texto(400, "lista publica so tem canais")
+                mudar(fontes.mapIndexed { j, f -> if (j == i) f.copy(aoVivo = p.corpo.trim() != "0") else f })
                 texto(200, "ok")
             }
             p.metodo == "PUT" && p.caminho.startsWith("/listas/") -> {

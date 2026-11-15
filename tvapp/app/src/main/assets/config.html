@@ -22,6 +22,7 @@
   .botoes { display: flex; gap: 6px; flex-shrink: 0; }
   label.categoria { display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; }
   label.categoria input { width: 22px; height: 22px; margin: 0; padding: 0; flex-shrink: 0; }
+  label.opcao { margin-top: 6px; font-size: 14px; color: var(--cinza); }
   .tipo { display: block; color: var(--cinza); font-size: 14px; }
   .dica, .msg { color: var(--cinza); font-size: 15px; }
   .msg { min-height: 1.4em; }
@@ -131,7 +132,7 @@
     if (vez !== vezes) return;
 
     const itens = linhas.map((linha) => {
-      const [i, dominio, tipo, rotulo = ''] = linha.split('\t');
+      const [i, dominio, tipo, rotulo = '', aovivo = '1'] = linha.split('\t');
       const li = document.createElement('li');
       const nome = document.createElement('span');
       nome.textContent = rotulo || dominio;
@@ -139,6 +140,22 @@
       sub.className = 'tipo';
       sub.textContent = (rotulo ? dominio + ' · ' : '') + (tipo === 'propria' ? 'sua lista (sem teste)' : 'pública (canais testados)');
       nome.append(sub);
+      // Lista propria: pode ficar so com filmes e series (os canais ao vivo dela nao entram).
+      if (tipo === 'propria') {
+        const opcao = document.createElement('label');
+        opcao.className = 'categoria opcao';
+        const caixa = document.createElement('input');
+        caixa.type = 'checkbox';
+        caixa.checked = aovivo === '1';
+        caixa.onchange = async () => {
+          try {
+            await pedir('PUT', '/listas/' + i + '/aovivo', caixa.checked ? '1' : '0');
+            $('msg').textContent = (caixa.checked ? 'Canais ao vivo incluídos.' : 'Só filmes e séries.') + ' A TV atualiza em uns 10 minutos.';
+          } catch (e) { $('msg').textContent = e.message; caixa.checked = !caixa.checked; }
+        };
+        opcao.append(caixa, document.createTextNode(' Incluir canais ao vivo'));
+        nome.append(opcao);
+      }
       const botoes = document.createElement('span');
       botoes.className = 'botoes';
       const renomear = document.createElement('button');

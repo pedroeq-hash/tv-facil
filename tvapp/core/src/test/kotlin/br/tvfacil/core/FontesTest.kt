@@ -57,6 +57,13 @@ class FontesTest {
     }
 
     @Test
+    fun `lista propria so com filmes e series (sem canais ao vivo) volta igual pelo arquivo`() {
+        val fontes = listOf(Fonte("https://ok.com/a.m3u", true, "So VOD", aoVivo = false), Fonte("https://ok.com/b.m3u", true))
+        assertEquals(fontes, Fontes.ler(Fontes.escrever(fontes)))
+        assertEquals(listOf(Fonte("https://ok.com/a.m3u", true, "", aoVivo = false)), Fontes.ler("V https://ok.com/a.m3u"))
+    }
+
+    @Test
     fun `nome vem do usuario - sem caracteres invisiveis, sem tab, ate 40 letras`() {
         assertEquals("AB", Fontes.nome("  A\u0007\tB\u202E ")) // controle, tab e inversao de texto somem
         assertEquals(40, Fontes.nome("x".repeat(100)).length)
