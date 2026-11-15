@@ -37,6 +37,7 @@ import br.tvfacil.core.Fase
 import br.tvfacil.core.Grupo
 import br.tvfacil.core.M3uParser
 import br.tvfacil.core.Navegacao
+import br.tvfacil.core.Pulo
 import br.tvfacil.core.ResultadoTeste
 import br.tvfacil.core.Retomar
 import br.tvfacil.core.Serie
@@ -65,7 +66,11 @@ class MainActivity : ComponentActivity(), Acoes {
     private var teclaEngolida = -1
     private var avisoSaida = Long.MIN_VALUE / 2 // hora (uptime) do "aperte de novo para sair"; metade evita estouro na subtracao
     private var termo by mutableStateOf("") // texto da busca
-    private var indiceBusca by mutableStateOf(emptyList<Pair<Canal, String>>()) // canais, filmes e series
+    // Nomes ja normalizados para a busca (Busca.indice), um por tipo: a do menu mostra ate 30 de cada.
+    private var indiceCanais by mutableStateOf(emptyList<Pair<Canal, String>>())
+    private var indiceFilmes by mutableStateOf(emptyList<Pair<Canal, String>>())
+    private var indiceSeries by mutableStateOf(emptyList<Pair<Canal, String>>())
+    private var termoGrade by mutableStateOf("") // busca no topo de Filmes / Series
 
     // Filmes e series (listas proprias; ver Arquivos e TesteJob).
     private var filmes by mutableStateOf(emptyList<Canal>())
@@ -87,6 +92,9 @@ class MainActivity : ComponentActivity(), Acoes {
     private var pausado by mutableStateOf(false)
     private var toques by mutableIntStateOf(0) // tecla no filme: mostra a barra
     private var salvoEm = 0L
+    // Segurar ◀▶: a barra mostra para onde vai (previa); o pulo e um so, ao soltar (cada pulo recarrega o video).
+    private var previa by mutableStateOf<Long?>(null)
+    private var baseDoPulo = 0L // posicao depois do toque (−10 s / +30 s) que abriu o segurar
     private val posicoes by lazy { getSharedPreferences("posicoes", MODE_PRIVATE) } // URL -> "pos:duracao"
 
     // O 1º canal depois de abrir o app demora mais (libVLC e rede "frios"): espera o dobro antes do aviso.
@@ -131,9 +139,9 @@ class MainActivity : ComponentActivity(), Acoes {
                 CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = ATKINSON)) {
                     val vod = Vod(
                         gruposFilmes, grupoFilmes, gruposSeries, grupoSeries, serieAberta, temporadas, temporadaAtual,
-                        ultimoVod, pausado, toques, { tempo },
+                        ultimoVod, pausado, toques, { tempo }, previa, termoGrade, indiceFilmes, indiceSeries,
                     )
-                    Tela(canais, grupos, grupoAtual, favoritos, video, camada, anterior, faixa, esperaMaximaMs, termo, indiceBusca, vod, player, this)
+                    Tela(canais, grupos, grupoAtual, favoritos, video, camada, anterior, faixa, esperaMaximaMs, termo, indiceCanais, vod, player, this)
                 }
             }
         }
@@ -153,6 +161,22 @@ class MainActivity : ComponentActivity(), Acoes {
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         // Clique que ficou na fila enquanto o stick engasgava: descarta, senao o app "sai clicando sozinho" depois.
         if (SystemClock.uptimeMillis() - e.eventTime > TECLA_VELHA_MS) return true
+        if (camada == Camada.FILME && (e.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount > 0) {
+                previa = Pulo.alvo(baseDoPulo, tempo.second, e.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT, e.eventTime - e.downTime)
+                toques++
+                return true
+            }
+            val alvo = previa
+            if (e.action == KeyEvent.ACTION_UP && alvo != null) {
+                player.irPara(alvo)
+                tempo = alvo to tempo.second
+                previa = null
+                teclaEngolida = -1
+                toques++
+                return true
+            }
+        }
         if (e.action == KeyEvent.ACTION_UP && e.keyCode == teclaEngolida) {
             teclaEngolida = -1
             return true
@@ -178,8 +202,8 @@ class MainActivity : ComponentActivity(), Acoes {
                         salvarPosicao()
                         toques++
                     }
-                    Efeito.VOLTAR_10S -> { player.pular(-10_000); toques++ }
-                    Efeito.AVANCAR_30S -> { player.pular(30_000); toques++ }
+                    Efeito.VOLTAR_10S -> { player.pular(-10_000); baseDoPulo = (tempo.first - 10_000).coerceAtLeast(0); toques++ }
+                    Efeito.AVANCAR_30S -> { player.pular(30_000); baseDoPulo = tempo.first + 30_000; toques++ }
                     Efeito.MOSTRAR_BARRA -> toques++
                     Efeito.SAIR_FILME -> sairDoFilme()
                     null -> Unit
@@ -236,7 +260,12 @@ class MainActivity : ComponentActivity(), Acoes {
         video.canal?.let(::abrir)
     }
 
+    override fun mudarTermoGrade(texto: String) {
+        termoGrade = texto
+    }
+
     override fun mostrar(camada: Camada) {
+        if (camada == Camada.FILMES || camada == Camada.SERIES) termoGrade = "" // aberto pelo menu: busca limpa
         this.camada = camada
         if (camada == Camada.ASSISTINDO) retomarAoVivo()
     }
@@ -260,6 +289,7 @@ class MainActivity : ComponentActivity(), Acoes {
         }
         ultimoVod = canal
         pausado = false
+        previa = null
         tempo = 0L to 0L
         salvoEm = 0
         camada = Camada.FILME
@@ -408,8 +438,14 @@ class MainActivity : ComponentActivity(), Acoes {
     }
 
     private fun atualizarBusca() {
-        val itens = canais.orEmpty() + filmes + series.map { it.comoCanal() }
-        lifecycleScope.launch { indiceBusca = withContext(Dispatchers.Default) { Busca.indice(itens) } }
+        val (c, f, s) = Triple(canais.orEmpty(), filmes, series.map { it.comoCanal() })
+        lifecycleScope.launch {
+            withContext(Dispatchers.Default) { Triple(Busca.indice(c), Busca.indice(f), Busca.indice(s)) }.let { (ic, ifi, ise) ->
+                indiceCanais = ic
+                indiceFilmes = ifi
+                indiceSeries = ise
+            }
+        }
     }
 
     private fun carregar() {

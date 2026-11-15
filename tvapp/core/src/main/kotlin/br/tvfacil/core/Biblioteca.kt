@@ -97,3 +97,20 @@ object Retomar {
     fun inicio(posMs: Long, duracaoMs: Long): Long =
         if (posMs >= 60_000 && (duracaoMs <= 0 || posMs < duracaoMs * 95 / 100)) posMs else 0
 }
+
+/**
+ * Segurar ◀▶ no filme: para onde pular, pelo tempo segurado. Cada vez mais rapido:
+ * ate 2 s, 30 s de filme por segundo; de 2 a 5 s, 2 min por segundo; depois, 5 min por segundo.
+ */
+object Pulo {
+    fun alvo(posMs: Long, duracaoMs: Long, frente: Boolean, seguradoMs: Long): Long {
+        val s = seguradoMs.coerceAtLeast(0)
+        val passo = when {
+            s <= 2_000 -> s * 30
+            s <= 5_000 -> 60_000 + (s - 2_000) * 120
+            else -> 60_000 + 360_000 + (s - 5_000) * 300
+        }
+        val fim = if (duracaoMs > 0) (duracaoMs - 5_000).coerceAtLeast(0) else Long.MAX_VALUE
+        return (if (frente) posMs + passo else posMs - passo).coerceIn(0, fim)
+    }
+}

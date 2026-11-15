@@ -60,6 +60,7 @@ class Painel(
                 texto(200, "ok")
             }
             p.metodo == "GET" && p.caminho == "/registro" -> texto(200, registro())
+            p.metodo == "GET" && p.caminho == "/resumo" -> texto(200, Resumo.simples(registro()).joinToString("\n"))
             // Canais avulsos: arquivo .m3u enviado pela pagina; so a quantidade volta (os links podem ter senha).
             p.metodo == "GET" && p.caminho == "/avulsos" -> texto(200, avulsos.toString())
             p.metodo == "POST" && p.caminho == "/avulsos" -> {

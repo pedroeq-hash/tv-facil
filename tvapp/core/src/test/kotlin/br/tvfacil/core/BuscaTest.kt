@@ -36,4 +36,13 @@ class BuscaTest {
     fun `termo vazio nao mostra nada`() {
         assertEquals(emptyList(), Busca.filtrar(canais("Record"), " "))
     }
+
+    @Test
+    fun `busca global - canais, series e filmes, com cota de cada tipo`() {
+        val canais = Busca.indice(canais("Rede Globo", "Record"))
+        val series = Busca.indice(listOf(Canal("Globo Repórter", "1", tipo = Tipo.SERIE), Canal("Dark", "2", tipo = Tipo.SERIE)))
+        val filmes = Busca.indice((1..50).map { Canal("Globo $it", "https://f.com/$it.mp4", tipo = Tipo.FILME) })
+        val r = Busca.global(canais, series, filmes, "globo", cota = 3)
+        assertEquals(listOf("Rede Globo", "Globo Repórter", "Globo 1", "Globo 2", "Globo 3"), nomes(r))
+    }
 }

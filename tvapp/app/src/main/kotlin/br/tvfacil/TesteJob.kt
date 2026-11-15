@@ -14,6 +14,7 @@ import br.tvfacil.core.Fontes
 import br.tvfacil.core.M3uParser
 import br.tvfacil.core.Serie
 import br.tvfacil.core.TesteCanais
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -53,7 +54,11 @@ class TesteJob : JobService() {
                     else -> rodar(this@TesteJob)
                 }
             }
-                .onFailure { registro(this@TesteJob).escrever("${agora()} ERRO na rodada: ${it.javaClass.simpleName}") }
+                .onFailure {
+                    // Cancelado = o Android parou o job (o nome da classe vem embaralhado pelo R8, ex. "m60").
+                    val motivo = if (it is CancellationException) "interrompida pelo Android" else it.javaClass.simpleName
+                    registro(this@TesteJob).escrever("${agora()} ERRO na rodada: $motivo")
+                }
             jobFinished(params, false)
         }
         return true // continua em segundo plano
@@ -144,7 +149,11 @@ class TesteJob : JobService() {
         }
 
         /** Fim do registro, para a pagina de configuracao (so tem dominios). */
-        fun fimDoRegistro(context: Context): String = runCatching { arquivoRegistro(context).readText().takeLast(6000) }.getOrDefault("")
+        // 64 KB: uma rodada tem ~170 linhas "falhou"; com menos, a pagina so mostrava essas linhas e nenhum resumo.
+        fun fimDoRegistro(context: Context): String = runCatching {
+            val texto = arquivoRegistro(context).readText()
+            if (texto.length <= 64_000) texto else texto.takeLast(64_000).substringAfter('\n')
+        }.getOrDefault("")
 
         private val trava = Mutex() // duas rodadas (a de 6 h e a "agora") nunca gravam juntas
 
@@ -208,6 +217,11 @@ class TesteJob : JobService() {
         private suspend fun atualizarProprias(context: Context, sempreTestar: Boolean) = trava.withLock {
             val log = registro(context)
             val inicio = System.currentTimeMillis()
+            // O diario (ID 3) roda logo depois de agendado: se a biblioteca e recente, nao baixa 85 MB de novo.
+            if (!sempreTestar && inicio - Arquivos.series(context).lastModified() < 20 * 60 * 60 * 1000L) {
+                log.escrever("${agora()} listas proprias: em dia, pulado")
+                return@withLock
+            }
             val proprias = lerFontes(context).filter { it.propria }
             log.escrever("${agora()} inicio: listas proprias (${proprias.size})")
             val baixados = proprias.indices.map { File(context.filesDir, "baixando_$it.m3u") }

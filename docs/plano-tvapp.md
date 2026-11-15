@@ -71,6 +71,7 @@ Completar, sempre em TDD no `:core`: favoritos, grupos, busca, troca por CH ▲�
 - Cada versão: aumentar `versionCode`, gerar o APK assinado, publicar com `gh release create vX.Y --attach app-release.apk`.
 - No stick: instalar o **Obtainium** (GitHub, `armeabi-v7a`), conferir permissões, apontar para o repo e permitir "instalar apps desconhecidos" **só para ele** (uma vez, com mouse).
 - A lista de canais continua sendo atualizada pelo pipeline do Termux (sem mudança).
+- **Verificação de desenvolvedor do Google (conferido em 15/11/2026):** a regra vale no Brasil desde 30/09/2026, por enquanto só para apps vindos de 7 lojas, e em 2027 passa a valer para todos os apps em aparelhos **certificados**. O stick **não é certificado**: o firmware é o genérico `google/walley/eros-p1`, a atualização de segurança é de 2019-12-05, a Play Store da TV não mostra certificação e a Proeletronic não está na lista de parceiros do Google. Por isso o Obtainium segue servindo. Rever quando o Google anunciar o mês de 2027. Se um dia o aparelho for certificado: criar uma conta gratuita de "distribuição limitada" (até 20 aparelhos) e registrar `br.tvfacil` com a chave atual. A reserva é atualizar por ADB, que continua liberado. Fonte: [guia do Google](https://developer.android.com/developer-verification/guides).
 
 ## Fase 6 — Encerramento (objetivo 7 do CLAUDE.md)
 Deixar o app na tela inicial (Arc Launcher) e manter o launcher original como reserva. Desligar a depuração, `adb disconnect`, resumo final do que mudou e como desfazer.
@@ -173,6 +174,15 @@ A tela carrega só os filmes e o índice das séries. Os episódios de uma séri
 - **Índice `series.tsv`:** os nomes chegam sem tab e sem quebra de linha, porque o `M3uParser` tira `\p{Cc}`. Linha estragada é ignorada. Há teste com nome malicioso.
 - **Itens 1 e 9 (senha nos links):** tudo fica em `filesDir`, que é privado e tem `allowBackup=false`. A posição de "continuar de onde parou" vai para `SharedPreferences` privado. O log mostra só o domínio e as contagens.
 - **Troca atômica:** a biblioteca nova é montada em `biblioteca.novo/` e só substitui a antiga no fim. Quem lê nunca pega uma biblioteca pela metade.
+
+### Ajustes depois do teste na TV (0.26)
+- **Registro simples na página:** `Resumo.simples` (`:core`, com testes) transforma o `registro.txt` em frases com horário de início e fim, além de uma previsão do próximo teste. A rota é `GET /resumo` e exige o token, como `/registro`.
+  - O registro completo continua em "Ver detalhes (avançado)".
+  - Nenhuma das duas mostra URL; só domínio e contagens.
+  - A página agora lê os últimos 64 KB do registro. Com 6 KB, só apareciam as linhas "falhou".
+- **Busca:** a do menu continua única, com até 30 canais, 30 séries e 30 filmes (`Busca.global`). Filmes e Séries ganham uma barra no topo que busca só naquele tipo.
+- **Segurar ◀▶ no filme:** a barra mostra uma prévia (`Pulo.alvo`, velocidade crescente), e o vídeo pula uma vez só, ao soltar. Cada pulo recarrega o vídeo, e o stick é fraco.
+- **Job diário (ID 3):** não baixa a lista de novo se a biblioteca tem menos de 20 h. Antes, ele rodava logo depois do ID 4. Quando o Android interrompe um job, o registro passa a dizer "interrompida pelo Android"; antes aparecia o nome embaralhado pelo R8.
 
 **Ordem sugerida:**
 1. Proteger o que já existe: itens 1, 3 e 4, em TDD no `:core`, mais o `curl --proto`.

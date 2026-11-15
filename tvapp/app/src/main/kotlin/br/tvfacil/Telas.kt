@@ -3,6 +3,7 @@ package br.tvfacil
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -111,6 +112,7 @@ interface Acoes {
     fun mudarTermo(texto: String)
     fun assistirFilme(canal: Canal, voltarPara: Camada, grupo: String)
     fun abrirSerie(item: Canal, grupo: String)
+    fun mudarTermoGrade(texto: String)
 }
 
 /** O que as telas de filmes e series mostram (estado na MainActivity). tempo: lido so na barra, que redesenha 1 vez por segundo. */
@@ -126,6 +128,10 @@ class Vod(
     val pausado: Boolean,
     val toques: Int,
     val tempo: () -> Pair<Long, Long>,
+    val previa: Long?, // segurando ◀▶: para onde o filme vai ao soltar
+    val termo: String, // busca no topo de Filmes / Series
+    val indiceFilmes: List<Pair<Canal, String>>,
+    val indiceSeries: List<Pair<Canal, String>>,
 )
 
 @Composable
@@ -140,7 +146,7 @@ fun Tela(
     faixa: String?,
     esperaMaximaMs: Long,
     termo: String,
-    indiceBusca: List<Pair<Canal, String>>,
+    indiceCanais: List<Pair<Canal, String>>,
     vod: Vod,
     player: VlcPlayer,
     acoes: Acoes,
@@ -187,13 +193,19 @@ fun Tela(
                 BarraCanal(canal, canal.url in favoritos, onde, Modifier.align(Alignment.BottomCenter))
             }
             Camada.LISTA -> ListaCanais(grupos, grupoAtual, canal, acoes)
-            Camada.BUSCA -> BuscaCanais(indiceBusca, termo, canal, acoes)
+            Camada.BUSCA -> BuscaCanais(indiceCanais, vod.indiceSeries, vod.indiceFilmes, termo, canal, acoes)
             Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
             Camada.CONFIGURAR -> Configurar()
-            Camada.FILMES -> GradeCanais("Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null) { c, g ->
+            Camada.FILMES -> GradeCanais(
+                "Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null,
+                busca = BuscaGrade(vod.termo, "buscar filme", vod.indiceFilmes, acoes::mudarTermoGrade),
+            ) { c, g ->
                 acoes.assistirFilme(c, Camada.FILMES, g)
             }
-            Camada.SERIES -> GradeCanais("Séries", vod.gruposSeries, vod.grupoSeries, vod.serie?.comoCanal(), selo = null) { c, g ->
+            Camada.SERIES -> GradeCanais(
+                "Séries", vod.gruposSeries, vod.grupoSeries, vod.serie?.comoCanal(), selo = null,
+                busca = BuscaGrade(vod.termo, "buscar série", vod.indiceSeries, acoes::mudarTermoGrade),
+            ) { c, g ->
                 acoes.abrirSerie(c, g)
             }
             Camada.SERIE -> GradeCanais(
@@ -202,7 +214,7 @@ fun Tela(
             ) { c, g -> acoes.assistirFilme(c, Camada.SERIE, g) }
             Camada.FILME -> when {
                 video.fase == Fase.INDISPONIVEL -> Aviso("Não deu para abrir.\n\nAperte Voltar.")
-                (barra || vod.pausado) && canal != null -> BarraFilme(canal, vod.tempo, vod.pausado, Modifier.align(Alignment.BottomCenter))
+                (barra || vod.pausado) && canal != null -> BarraFilme(canal, vod.tempo, vod.previa, vod.pausado, Modifier.align(Alignment.BottomCenter))
             }
             Camada.MENU -> Menu(
                 canal, canal?.url in favoritos, anterior, vod.gruposFilmes.isNotEmpty(), vod.gruposSeries.isNotEmpty(), acoes,
@@ -245,16 +257,18 @@ private fun BarraCanal(canal: Canal, favorito: Boolean, onde: String, modifier: 
 
 // Filme ou episodio: aparece ao apertar uma tecla e fica enquanto estiver pausado.
 @Composable
-private fun BarraFilme(canal: Canal, tempo: () -> Pair<Long, Long>, pausado: Boolean, modifier: Modifier) {
-    val (pos, duracao) = tempo()
+private fun BarraFilme(canal: Canal, tempo: () -> Pair<Long, Long>, previa: Long?, pausado: Boolean, modifier: Modifier) {
+    val (agora, duracao) = tempo()
+    val pos = previa ?: agora
     Column(
         modifier.padding(start = 32.dp, end = 32.dp, bottom = 27.dp).fillMaxWidth()
             .background(PAINEL, RoundedCornerShape(13.dp)).padding(horizontal = 21.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(canal.nome, color = TEXTO, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            if (pausado) Text("⏸ Pausado", color = FOCO, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(canal.nome, color = TEXTO, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f).passando())
+            if (previa != null) Text(if (previa >= agora) "⏩" else "⏪", color = FOCO, fontSize = 22.sp)
+            else if (pausado) Text("⏸ Pausado", color = FOCO, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
         Box(Modifier.fillMaxWidth().height(6.dp).background(BORDA, RoundedCornerShape(3.dp))) {
             if (duracao > 0) {
@@ -262,14 +276,22 @@ private fun BarraFilme(canal: Canal, tempo: () -> Pair<Long, Long>, pausado: Boo
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(if (duracao > 0) "${relogio(pos)} / ${relogio(duracao)}" else relogio(pos), color = CINZA, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text(
+                if (duracao > 0) "${relogio(pos)} / ${relogio(duracao)}" else relogio(pos),
+                color = if (previa != null) FOCO else CINZA, fontSize = 16.sp, fontWeight = if (previa != null) FontWeight.Bold else null,
+                modifier = Modifier.weight(1f),
+            )
             Dica("OK", if (pausado) "continuar" else "pausar", 12.sp)
             Dica("◀", "−10 s", 12.sp)
             Dica("▶", "+30 s", 12.sp)
+            Dica("segure", "rápido", 12.sp)
             Dica("Voltar", "sair", 12.sp)
         }
     }
 }
+
+// Nome que nao cabe: anda devagar, para um pouco no comeco e anda de novo. So no item em foco: o stick e fraco.
+private fun Modifier.passando() = basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 1_500, repeatDelayMillis = 2_000)
 
 private fun relogio(ms: Long): String {
     val s = ms / 1000
@@ -347,10 +369,16 @@ private fun ListaCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, 
 }
 
 @Composable
-private fun BuscaCanais(indice: List<Pair<Canal, String>>, termo: String, atual: Canal?, acoes: Acoes) {
-    val resultados = remember(indice, termo) { Busca.filtrar(indice, termo) }
+private fun BuscaCanais(
+    canais: List<Pair<Canal, String>>,
+    series: List<Pair<Canal, String>>,
+    filmes: List<Pair<Canal, String>>,
+    termo: String,
+    atual: Canal?,
+    acoes: Acoes,
+) {
+    val resultados = remember(canais, series, filmes, termo) { Busca.global(canais, series, filmes, termo) }
     val campo = remember { FocusRequester() }
-    var campoFocado by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(50)
         runCatching { campo.requestFocus() }
@@ -360,20 +388,7 @@ private fun BuscaCanais(indice: List<Pair<Canal, String>>, termo: String, atual:
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         Text("Buscar", color = TEXTO, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        BasicTextField(
-            value = termo,
-            onValueChange = acoes::mudarTermo,
-            singleLine = true,
-            textStyle = TextStyle(color = TEXTO, fontSize = 22.sp, fontFamily = ATKINSON),
-            cursorBrush = SolidColor(FOCO),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            modifier = Modifier.fillMaxWidth().focusRequester(campo).onFocusChanged { campoFocado = it.isFocused }
-                .border(3.dp, if (campoFocado) FOCO else BORDA, RoundedCornerShape(9.dp)).padding(12.dp),
-            decorationBox = { texto ->
-                if (termo.isEmpty()) Text("canal, filme ou série", color = CINZA, fontSize = 22.sp)
-                texto()
-            },
-        )
+        CampoBusca(termo, "canal, filme ou série", acoes::mudarTermo, Modifier.fillMaxWidth().focusRequester(campo))
         when {
             termo.isBlank() -> Text("Aperte OK para digitar o nome do canal, do filme ou da série.", color = CINZA, fontSize = 16.sp)
             resultados.isEmpty() -> Text("Nada com “$termo”", color = CINZA, fontSize = 16.sp)
@@ -404,11 +419,32 @@ private fun BuscaCanais(indice: List<Pair<Canal, String>>, termo: String, atual:
     }
 }
 
+// OK abre o teclado do sistema; ▼ vai para os resultados.
+@Composable
+private fun CampoBusca(termo: String, dica: String, aoMudar: (String) -> Unit, modifier: Modifier, tamanho: TextUnit = 22.sp) {
+    var focado by remember { mutableStateOf(false) }
+    BasicTextField(
+        value = termo,
+        onValueChange = aoMudar,
+        singleLine = true,
+        textStyle = TextStyle(color = TEXTO, fontSize = tamanho, fontFamily = ATKINSON),
+        cursorBrush = SolidColor(FOCO),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        modifier = modifier.onFocusChanged { focado = it.isFocused }
+            .border(3.dp, if (focado) FOCO else BORDA, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
+        decorationBox = { texto ->
+            if (termo.isEmpty()) Text(if (focado) "$dica (OK para digitar)" else "🔍 $dica", color = CINZA, fontSize = tamanho)
+            texto()
+        },
+    )
+}
+
 @Composable
 private fun ItemCanal(canal: Canal, noAr: Boolean, modifier: Modifier, detalhe: String? = null, onClick: () -> Unit) {
+    var focado by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().onFocusChanged { focado = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(9.dp)),
         colors = coresFoco(),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
@@ -419,7 +455,10 @@ private fun ItemCanal(canal: Canal, noAr: Boolean, modifier: Modifier, detalhe: 
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Text(canal.nome, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    canal.nome, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    overflow = if (focado) TextOverflow.Clip else TextOverflow.Ellipsis, modifier = if (focado) Modifier.passando() else Modifier,
+                )
                 if (detalhe != null) Text(detalhe, fontSize = 13.sp, maxLines = 1)
             }
             if (noAr) NoAr()
@@ -435,6 +474,9 @@ private fun NoAr(modifier: Modifier = Modifier, texto: String = "NO AR") {
     )
 }
 
+/** Busca no topo da grade (Filmes, Series): so naquele tipo. */
+class BuscaGrade(val termo: String, val dica: String, val indice: List<Pair<Canal, String>>, val aoMudar: (String) -> Unit)
+
 // Tela cheia (cobre o video; o som continua): grupos a esquerda, cartoes a direita. OK no cartao assiste e fecha.
 // Serve para canais, filmes, series e episodios. selo: marca no cartao "atual" (null = sem marca, so o foco).
 @Composable
@@ -445,11 +487,16 @@ private fun GradeCanais(
     atual: Canal?,
     selo: String? = "NO AR",
     sigla: (Canal) -> String = { Catalogo.sigla(it.nome) },
+    busca: BuscaGrade? = null,
     aoEscolher: (Canal, String) -> Unit,
 ) {
     if (grupos.isEmpty()) return
     var indice by remember { mutableIntStateOf(grupos.indexOfFirst { it.nome == grupoAtual }.coerceAtLeast(0)) }
-    val grupo = grupos[indice.coerceIn(grupos.indices)]
+    val termo = busca?.termo.orEmpty()
+    val resultados = remember(busca?.indice, termo) { busca?.let { Busca.filtrar(it.indice, termo) }.orEmpty() }
+    // Com termo: a grade mostra os resultados (de todas as categorias) no lugar do grupo.
+    val buscando = termo.isNotBlank()
+    val grupo = if (buscando) Grupo("Resultados para “${termo.trim()}”", resultados) else grupos[indice.coerceIn(grupos.indices)]
     val alvo = grupo.canais.indexOf(atual).coerceAtLeast(0)
     val rolagem = rememberLazyGridState()
     val foco = remember { FocusRequester() }
@@ -476,7 +523,11 @@ private fun GradeCanais(
                 Surface(
                     onClick = { indice = i },
                     modifier = Modifier.fillMaxWidth().then(if (escolhido) Modifier.focusRequester(grupoFoco) else Modifier)
-                        .onFocusChanged { if (it.isFocused) indice = i },
+                        .onFocusChanged {
+                            if (!it.isFocused) return@onFocusChanged
+                            indice = i
+                            if (termo.isNotEmpty()) busca?.aoMudar?.invoke("") // foi para as categorias: sai da busca
+                        },
                     shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
                     colors = ClickableSurfaceDefaults.colors(
                         containerColor = if (escolhido) SELO else Color.Transparent,
@@ -494,7 +545,10 @@ private fun GradeCanais(
             }
         }
         Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 27.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-            Text(grupo.nome, color = TEXTO, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            // Acima de tudo: ▲ na 1ª fileira de cartoes ou no 1º grupo da esquerda chega aqui.
+            if (busca != null) CampoBusca(termo, busca.dica, busca.aoMudar, Modifier.fillMaxWidth(), tamanho = 18.sp)
+            Text(grupo.nome, color = TEXTO, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (buscando && resultados.isEmpty()) Text("Nada com “${termo.trim()}”", color = CINZA, fontSize = 16.sp)
             LazyVerticalGrid(
                 GridCells.Fixed(4),
                 state = rolagem,
@@ -505,7 +559,9 @@ private fun GradeCanais(
             ) {
                 items(grupo.canais.size) { i ->
                     val c = grupo.canais[i]
-                    CartaoCanal(c, sigla(c), if (c == atual) selo else null, if (i == alvo) Modifier.focusRequester(foco) else Modifier) { aoEscolher(c, grupo.nome) }
+                    CartaoCanal(c, sigla(c), if (c == atual) selo else null, if (i == alvo) Modifier.focusRequester(foco) else Modifier) {
+                        aoEscolher(c, if (buscando) c.grupo else grupo.nome) // resultado: volta para a categoria certa
+                    }
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -537,7 +593,8 @@ private fun CartaoCanal(canal: Canal, sigla: String, selo: String?, modifier: Mo
                 Box(Modifier.size(43.dp).background(if (focado) FOCO else SELO, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
                     Text(sigla, color = if (focado) SOBRE_FOCO else TEXTO, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-                Text(canal.nome, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (focado) Text(canal.nome, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.passando())
+                else Text(canal.nome, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (selo != null) NoAr(Modifier.align(Alignment.TopEnd).padding(5.dp), selo)
         }

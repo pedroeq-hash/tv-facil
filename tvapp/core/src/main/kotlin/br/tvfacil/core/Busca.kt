@@ -23,4 +23,13 @@ object Busca {
             .take(max)
             .map { it.first }
     }
+
+    /** Busca do menu: canais, series e filmes, ate `cota` de cada (com 30 mil filmes, as series sumiriam). */
+    fun global(
+        canais: List<Pair<Canal, String>>,
+        series: List<Pair<Canal, String>>,
+        filmes: List<Pair<Canal, String>>,
+        termo: String,
+        cota: Int = 30,
+    ): List<Canal> = filtrar(canais, termo, cota) + filtrar(series, termo, cota) + filtrar(filmes, termo, cota)
 }

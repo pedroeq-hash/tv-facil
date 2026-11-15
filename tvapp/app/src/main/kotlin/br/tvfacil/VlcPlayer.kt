@@ -89,6 +89,11 @@ class VlcPlayer(
         if (duracao > 0) mp.time = (mp.time + ms).coerceIn(0, duracao - 1_000)
     }
 
+    fun irPara(ms: Long) = fila.execute {
+        val duracao = mp.length
+        if (duracao > 0) mp.time = ms.coerceIn(0, duracao - 1_000)
+    }
+
     fun parar(depois: () -> Unit = {}) = fila.execute {
         mp.stop()
         principal.post { atual = null }

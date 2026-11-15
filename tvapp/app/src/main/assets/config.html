@@ -20,6 +20,11 @@
   .tipo { display: block; color: var(--cinza); font-size: 14px; }
   .dica, .msg { color: var(--cinza); font-size: 15px; }
   .msg { min-height: 1.4em; }
+  #resumo li { display: block; font-size: 16px; }
+  #resumo li.previsao { background: none; padding: 2px 0; color: var(--cinza); }
+  #resumo li.alerta { border-left: 4px solid var(--foco); }
+  details { margin-top: 16px; }
+  summary { cursor: pointer; color: var(--cinza); font-size: 15px; }
   pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--cinza); background: var(--cartao); padding: 12px; border-radius: 8px; max-height: 50vh; overflow: auto; }
 </style>
 </head>
@@ -53,10 +58,14 @@
     <button id="apagar" class="secundario">Apagar canais avulsos</button>
     <p id="msgAvulsos" class="msg" role="status"></p>
 
-    <h2>Registro</h2>
-    <p class="dica">O que a TV fez nas últimas atualizações (só aparece o nome do site, nunca a senha).</p>
-    <button id="atualizar" class="secundario">Atualizar registro</button>
-    <pre id="registro"></pre>
+    <h2>O que a TV fez</h2>
+    <p class="dica">As últimas atualizações, a mais nova primeiro (horário da TV). Só aparece o nome do site, nunca a senha.</p>
+    <ul id="resumo"></ul>
+    <button id="atualizar" class="secundario">Atualizar</button>
+    <details>
+      <summary>Ver detalhes (avançado)</summary>
+      <pre id="registro"></pre>
+    </details>
   </section>
 </main>
 <script>
@@ -102,6 +111,17 @@
     }
     const n = await pedir('GET', '/avulsos');
     $('avulsos').textContent = n === '0' ? 'Nenhum canal avulso na TV.' : 'A TV tem ' + n + ' canais avulsos (sem teste).';
+    const resumo = $('resumo');
+    resumo.replaceChildren();
+    const frases = (await pedir('GET', '/resumo')).split('\n').filter(Boolean);
+    if (!frases.length) frases.push('Nada ainda: a TV testa os canais a cada 6 horas.');
+    for (const f of frases) {
+      const li = document.createElement('li');
+      li.textContent = f;
+      if (f.startsWith('Próxim')) li.className = 'previsao';
+      else if (f.startsWith('⚠')) li.className = 'alerta';
+      resumo.append(li);
+    }
     $('registro').textContent = await pedir('GET', '/registro');
   }
 

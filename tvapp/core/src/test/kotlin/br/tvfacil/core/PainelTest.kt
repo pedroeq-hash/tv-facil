@@ -13,7 +13,7 @@ class PainelTest {
     private val publica = Fonte("https://iptv-org.github.io/iptv/countries/br.m3u", false)
     private val painel = Painel(
         endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "<html>pagina</html>",
-        registro = { "linha do log" }, avulsos = 2, aoMudarAvulsos = { avulsosSalvos = it },
+        registro = { "2026-11-15 06:51:00 inicio da rodada\n  falhou: x.com - HTTP 404" }, avulsos = 2, aoMudarAvulsos = { avulsosSalvos = it },
     ) { salvas = it }
 
     // Arquivo .m3u com n canais; por padrao com usuario e senha no link, como nas listas pagas.
@@ -120,7 +120,15 @@ class PainelTest {
 
     @Test
     fun `mostra o registro e responde 404 para o resto`() {
-        assertEquals("linha do log", painel.responder(comToken("GET", "/registro")).corpo)
+        assertEquals("2026-11-15 06:51:00 inicio da rodada\n  falhou: x.com - HTTP 404", painel.responder(comToken("GET", "/registro")).corpo)
         assertEquals(404, painel.responder(comToken("GET", "/outra")).codigo)
+    }
+
+    @Test
+    fun `resumo simples do registro so com o token`() {
+        assertEquals(401, painel.responder(pedido("GET", "/resumo")).codigo)
+        val r = painel.responder(comToken("GET", "/resumo"))
+        assertEquals(200, r.codigo)
+        assertEquals("Próximo teste dos canais: por volta de 15/11 12:51.\n15/11 06:51 — Testando os canais agora…", r.corpo)
     }
 }
