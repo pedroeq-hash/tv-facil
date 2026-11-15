@@ -48,4 +48,17 @@ class FontesTest {
         for (url in recusadas) assertFalse(Fontes.urlAceita(url), url)
         assertTrue(Fontes.urlAceita("http://172.32.0.1/a.m3u")) // fora da faixa privada 172.16-31
     }
+
+    @Test
+    fun `nome da lista - escreve e le de volta, e arquivo antigo sem nome continua valendo`() {
+        val fontes = listOf(Fonte("https://ok.com/a.m3u", true, "Lista do João — filmes"), Fonte("https://ok.com/b.m3u", false))
+        assertEquals(fontes, Fontes.ler(Fontes.escrever(fontes)))
+        assertEquals(listOf(Fonte("https://ok.com/a.m3u", true, "")), Fontes.ler("P https://ok.com/a.m3u"))
+    }
+
+    @Test
+    fun `nome vem do usuario - sem caracteres invisiveis, sem tab, ate 40 letras`() {
+        assertEquals("AB", Fontes.nome("  A\u0007\tB\u202E ")) // controle, tab e inversao de texto somem
+        assertEquals(40, Fontes.nome("x".repeat(100)).length)
+    }
 }

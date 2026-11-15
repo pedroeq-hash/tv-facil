@@ -60,7 +60,7 @@ class PainelTest {
     fun `lista as fontes mostrando so o dominio`() {
         painel.responder(comToken("POST", "/listas", "http://meu.servidor.com:8080/get.php?u=joao&p=segredo"))
         val corpo = painel.responder(comToken("GET", "/listas")).corpo
-        assertEquals("0\tiptv-org.github.io\tpublica\n1\tmeu.servidor.com\tpropria\n", corpo)
+        assertEquals("0\tiptv-org.github.io\tpublica\t\n1\tmeu.servidor.com\tpropria\t\n", corpo)
         assertFalse("segredo" in corpo || "joao" in corpo)
     }
 
@@ -130,5 +130,19 @@ class PainelTest {
         val r = painel.responder(comToken("GET", "/resumo"))
         assertEquals(200, r.codigo)
         assertEquals("Próximo teste dos canais: por volta de 15/11 12:51.\n15/11 06:51 — Testando os canais agora…", r.corpo)
+    }
+
+    @Test
+    fun `nome da lista - na 2a linha ao adicionar, trocado depois com PUT`() {
+        assertEquals(200, painel.responder(comToken("POST", "/listas", "https://ok.com/a.m3u\nLista do João")).codigo)
+        assertEquals(Fonte("https://ok.com/a.m3u", true, "Lista do João"), salvas!!.last())
+        assertEquals(200, painel.responder(comToken("PUT", "/listas/0", "Públicas BR")).codigo)
+        assertEquals("Públicas BR", salvas!![0].nome)
+        assertEquals(
+            "0\tiptv-org.github.io\tpublica\tPúblicas BR\n1\tok.com\tpropria\tLista do João\n",
+            painel.responder(comToken("GET", "/listas")).corpo,
+        )
+        assertEquals(404, painel.responder(comToken("PUT", "/listas/9", "x")).codigo)
+        assertEquals(401, painel.responder(pedido("PUT", "/listas/0", "x")).codigo)
     }
 }

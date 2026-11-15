@@ -182,6 +182,11 @@ A tela carrega só os filmes e o índice das séries. Os episódios de uma séri
   - A página agora lê os últimos 64 KB do registro. Com 6 KB, só apareciam as linhas "falhou".
 - **Busca:** a do menu continua única, com até 30 canais, 30 séries e 30 filmes (`Busca.global`). Filmes e Séries ganham uma barra no topo que busca só naquele tipo.
 - **Segurar ◀▶ no filme:** a barra mostra uma prévia (`Pulo.alvo`, velocidade crescente), e o vídeo pula uma vez só, ao soltar. Cada pulo recarrega o vídeo, e o stick é fraco.
+- **Nome das listas (0.27):** cada lista tem um nome opcional, dado pelo usuário: 2ª linha do `POST /listas` ou `PUT /listas/<i>`.
+  - O nome não é confiável: `Fontes.nome` tira caracteres de controle e invisíveis (inclusive tab e quebra de linha) e corta em 40 letras.
+  - Ele é gravado depois de um tab em `listas.txt` e aparece na página só por `textContent`.
+  - Trocar só o nome não baixa nada de novo.
+  - Os canais avulsos continuam **sem teste** (decisão do usuário), e a página avisa isso.
 - **Job diário (ID 3):** não baixa a lista de novo se a biblioteca tem menos de 20 h. Antes, ele rodava logo depois do ID 4. Quando o Android interrompe um job, o registro passa a dizer "interrompida pelo Android"; antes aparecia o nome embaralhado pelo R8.
 
 **Ordem sugerida:**

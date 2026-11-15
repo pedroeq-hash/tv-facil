@@ -17,6 +17,7 @@
   ul { list-style: none; padding: 0; margin: 0; }
   li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; background: var(--cartao); border-radius: 8px; }
   li button { margin: 0; }
+  .botoes { display: flex; gap: 6px; flex-shrink: 0; }
   .tipo { display: block; color: var(--cinza); font-size: 14px; }
   .dica, .msg { color: var(--cinza); font-size: 15px; }
   .msg { min-height: 1.4em; }
@@ -40,17 +41,20 @@
   </section>
 
   <section id="painel" hidden>
-    <h2>Listas de canais</h2>
+    <h2>Listas M3U</h2>
     <ul id="listas"></ul>
 
     <h2>Adicionar uma lista</h2>
     <label for="url">Endereço da lista M3U (começa com http:// ou https://):</label>
     <input id="url" type="url" autocomplete="off" placeholder="https://...">
+    <label for="nomeLista">Nome para você reconhecer a lista (opcional):</label>
+    <input id="nomeLista" maxlength="40" autocomplete="off" placeholder="ex.: Lista do João — filmes">
     <button id="adicionar">Adicionar</button>
     <p id="msg" class="msg" role="status"></p>
     <p class="dica">Suas listas entram como vieram, com as categorias delas. Depois de adicionar ou remover, a TV leva uns 5 minutos para atualizar os canais.</p>
 
     <h2>Canais avulsos (arquivo .m3u)</h2>
+    <p class="dica"><strong>Atenção:</strong> os canais avulsos <strong>não passam pelo teste</strong> da TV. Eles aparecem sempre no topo da lista, mesmo quando estão fora do ar. Se um não abrir, o problema está no endereço do canal: apague e envie um arquivo novo.</p>
     <p id="avulsos" class="dica"></p>
     <label for="arquivo">Escolha um arquivo .m3u do celular ou do notebook. Ele substitui os canais avulsos que a TV já tem:</label>
     <input id="arquivo" type="file" accept=".m3u,.m3u8,.txt">
@@ -90,23 +94,35 @@
       lista.append(li);
     }
     for (const linha of linhas) {
-      const [i, dominio, tipo] = linha.split('\t');
+      const [i, dominio, tipo, rotulo = ''] = linha.split('\t');
       const li = document.createElement('li');
       const nome = document.createElement('span');
-      nome.textContent = dominio;
+      nome.textContent = rotulo || dominio;
       const sub = document.createElement('span');
       sub.className = 'tipo';
-      sub.textContent = tipo === 'propria' ? 'sua lista (sem teste)' : 'pública (canais testados)';
+      sub.textContent = (rotulo ? dominio + ' · ' : '') + (tipo === 'propria' ? 'sua lista (sem teste)' : 'pública (canais testados)');
       nome.append(sub);
+      const botoes = document.createElement('span');
+      botoes.className = 'botoes';
+      const renomear = document.createElement('button');
+      renomear.className = 'secundario';
+      renomear.textContent = 'Renomear';
+      renomear.onclick = async () => {
+        const novo = prompt('Nome da lista ' + dominio + ' (até 40 letras):', rotulo);
+        if (novo === null) return;
+        try { await pedir('PUT', '/listas/' + i, novo); $('msg').textContent = 'Nome salvo.'; carregar(); }
+        catch (e) { $('msg').textContent = e.message; }
+      };
       const remover = document.createElement('button');
       remover.className = 'secundario';
       remover.textContent = 'Remover';
       remover.onclick = async () => {
-        if (!confirm('Remover a lista ' + dominio + '?')) return;
+        if (!confirm('Remover a lista ' + (rotulo || dominio) + '?')) return;
         try { await pedir('DELETE', '/listas/' + i); $('msg').textContent = 'Lista removida. A TV atualiza em uns 5 minutos.'; carregar(); }
         catch (e) { $('msg').textContent = e.message; }
       };
-      li.append(nome, remover);
+      botoes.append(renomear, remover);
+      li.append(nome, botoes);
       lista.append(li);
     }
     const n = await pedir('GET', '/avulsos');
@@ -136,8 +152,9 @@
 
   $('adicionar').onclick = async () => {
     try {
-      await pedir('POST', '/listas', $('url').value.trim());
+      await pedir('POST', '/listas', $('url').value.trim() + '\n' + $('nomeLista').value.trim());
       $('url').value = '';
+      $('nomeLista').value = '';
       $('msg').textContent = 'Lista adicionada. A TV atualiza em uns 5 minutos.';
       await carregar();
     } catch (e) { $('msg').textContent = e.message; }

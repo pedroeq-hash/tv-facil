@@ -1,6 +1,7 @@
 package br.tvfacil
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -48,6 +49,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -433,10 +438,31 @@ private fun CampoBusca(termo: String, dica: String, aoMudar: (String) -> Unit, m
         modifier = modifier.onFocusChanged { focado = it.isFocused }
             .border(3.dp, if (focado) FOCO else BORDA, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 9.dp),
         decorationBox = { texto ->
-            if (termo.isEmpty()) Text(if (focado) "$dica (OK para digitar)" else "🔍 $dica", color = CINZA, fontSize = tamanho)
-            texto()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                IconeBusca(if (focado) FOCO else CINZA, Modifier.size(with(LocalDensity.current) { tamanho.toDp() }))
+                Box(Modifier.weight(1f)) {
+                    if (termo.isEmpty()) Text(if (focado) "$dica (OK para digitar)" else dica, color = CINZA, fontSize = tamanho, maxLines = 1)
+                    texto()
+                }
+            }
         },
     )
+}
+
+// Lupa ao lado de linhas, so com tracos (no estilo das telas, sem emoji). Desenhada: nao precisa de arquivo de icone.
+@Composable
+private fun IconeBusca(cor: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val u = size.minDimension // proporcoes do desenho de referencia (quadro de 960)
+        val traco = Stroke(width = u * 0.075f, cap = StrokeCap.Round)
+        fun linha(y: Float, x2: Float) = drawLine(cor, Offset(u * 0.15f, u * y), Offset(u * x2, u * y), traco.width, StrokeCap.Round)
+        linha(0.22f, 0.56f)
+        linha(0.41f, 0.34f)
+        linha(0.60f, 0.31f)
+        linha(0.79f, 0.41f)
+        drawCircle(cor, radius = u * 0.2f, center = Offset(u * 0.64f, u * 0.56f), style = traco)
+        drawLine(cor, Offset(u * 0.79f, u * 0.71f), Offset(u * 0.87f, u * 0.79f), traco.width, StrokeCap.Round)
+    }
 }
 
 @Composable

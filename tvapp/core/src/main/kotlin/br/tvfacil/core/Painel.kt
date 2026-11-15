@@ -45,12 +45,20 @@ class Painel(
         if (!igual(p.cabecalhos["x-token"] ?: "", token)) return texto(401, "digite o PIN de novo")
         return when {
             p.metodo == "GET" && p.caminho == "/listas" -> texto(200, fontes.withIndex().joinToString("") { (i, f) ->
-                "$i\t${TesteCanais.dominio(f.url)}\t${if (f.propria) "propria" else "publica"}\n"
+                "$i\t${TesteCanais.dominio(f.url)}\t${if (f.propria) "propria" else "publica"}\t${f.nome}\n"
             })
+            // Corpo: URL na 1a linha, nome (opcional) na 2a.
             p.metodo == "POST" && p.caminho == "/listas" -> {
-                val url = p.corpo.trim()
+                val url = p.corpo.lineSequence().first().trim()
                 if (!Fontes.urlAceita(url)) return texto(400, "endereco nao aceito: use http:// ou https:// da internet")
-                if (fontes.none { it.url == url }) mudar(fontes + Fonte(url, propria = true))
+                val nome = Fontes.nome(p.corpo.lines().getOrElse(1) { "" })
+                if (fontes.none { it.url == url }) mudar(fontes + Fonte(url, propria = true, nome))
+                texto(200, "ok")
+            }
+            p.metodo == "PUT" && p.caminho.startsWith("/listas/") -> {
+                val i = p.caminho.removePrefix("/listas/").toIntOrNull()
+                if (i == null || i !in fontes.indices) return texto(404, "lista nao encontrada")
+                mudarNome(i, Fontes.nome(p.corpo))
                 texto(200, "ok")
             }
             p.metodo == "DELETE" && p.caminho.startsWith("/listas/") -> {
@@ -82,6 +90,8 @@ class Painel(
         fontes = novas
         aoMudar(novas)
     }
+
+    private fun mudarNome(i: Int, nome: String) = mudar(fontes.mapIndexed { j, f -> if (j == i) f.copy(nome = nome) else f })
 
     private fun mudarAvulsos(canais: List<Canal>) {
         avulsos = canais.size

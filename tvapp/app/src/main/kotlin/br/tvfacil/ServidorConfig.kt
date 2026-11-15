@@ -15,14 +15,14 @@ import java.security.SecureRandom
 import kotlin.concurrent.thread
 
 /**
- * Servidor da pagina de configuracao. So existe enquanto a tela "Configurar pelo celular" esta aberta:
+ * Servidor da pagina de configuracao. So existe enquanto a tela "Configurar" esta aberta:
  * fechou a tela, fechou a porta. Regras: docs/plano-tvapp.md, Fase 7. A logica (e os testes) ficam no Painel (:core).
  */
 class ServidorConfig(private val context: Context) {
     val ip: String? = ipDaRede()
     private val sorte = SecureRandom()
     val pin = "%06d".format(sorte.nextInt(1_000_000))
-    var status by mutableStateOf("Aguardando o celular…")
+    var status by mutableStateOf("Aguardando o aparelho…")
         private set
     private var porta: ServerSocket? = null
 
@@ -43,7 +43,12 @@ class ServidorConfig(private val context: Context) {
                 status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
             },
         ) { novas ->
+            val enderecosAntes = TesteJob.lerFontes(context).map { it.url }
             TesteJob.salvarFontes(context, novas)
+            if (novas.map { it.url } == enderecosAntes) { // so mudou o nome: nada a baixar
+                status = "Nome da lista salvo."
+                return@Painel
+            }
             TesteJob.atualizarPropriasAgora(context) // refaz filmes e series e, no fim, testa os canais
             status = "Listas salvas. Canais, filmes e séries novos aparecem em uns 10 minutos."
         }
@@ -58,7 +63,7 @@ class ServidorConfig(private val context: Context) {
                             status = "Bloqueado: PIN errado 5 vezes. Feche e abra esta tela."
                             break
                         }
-                        if (painel.pareado && status.startsWith("Aguardando")) status = "Celular conectado."
+                        if (painel.pareado && status.startsWith("Aguardando")) status = "Aparelho conectado."
                     }
                 }
             }.onFailure { if (porta?.isClosed != true) status = "Não consegui abrir a configuração (${it.javaClass.simpleName})." }
