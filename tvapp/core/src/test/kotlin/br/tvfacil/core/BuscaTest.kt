@@ -25,6 +25,14 @@ class BuscaTest {
     }
 
     @Test
+    fun `indice pronto da o mesmo resultado e corta no maximo`() {
+        val lista = canais("Rede Globo", "GloboNews", "Globoplay Novelas")
+        val indice = Busca.indice(lista)
+        assertEquals(nomes(Busca.filtrar(lista, "globo")), nomes(Busca.filtrar(indice, "globo")))
+        assertEquals(listOf("GloboNews", "Globoplay Novelas"), nomes(Busca.filtrar(indice, "globo", max = 2)))
+    }
+
+    @Test
     fun `termo vazio nao mostra nada`() {
         assertEquals(emptyList(), Busca.filtrar(canais("Record"), " "))
     }

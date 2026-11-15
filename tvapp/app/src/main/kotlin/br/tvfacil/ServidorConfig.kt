@@ -36,10 +36,16 @@ class ServidorConfig(private val context: Context) {
             fontes = TesteJob.lerFontes(context),
             pagina = context.assets.open("config.html").bufferedReader().use { it.readText() },
             registro = { TesteJob.fimDoRegistro(context) },
+            avulsos = TesteJob.contarAvulsos(context),
+            aoMudarAvulsos = { canais ->
+                TesteJob.salvarAvulsos(context, canais)
+                TesteJob.rodarAgora(context)
+                status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
+            },
         ) { novas ->
             TesteJob.salvarFontes(context, novas)
-            TesteJob.rodarAgora(context)
-            status = "Listas salvas. Os canais novos aparecem em uns 5 minutos."
+            TesteJob.atualizarPropriasAgora(context) // refaz filmes e series e, no fim, testa os canais
+            status = "Listas salvas. Canais, filmes e séries novos aparecem em uns 10 minutos."
         }
         thread(name = "config", isDaemon = true) {
             runCatching {

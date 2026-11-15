@@ -1,5 +1,7 @@
 # Dados do aparelho (backup, logs, APKs): nunca no repositorio publico
 /stick/
+# Arquivos temporários
+/temp/
 # Dados desta maquina/rede (IP do stick etc.)
 CLAUDE.local.md
 

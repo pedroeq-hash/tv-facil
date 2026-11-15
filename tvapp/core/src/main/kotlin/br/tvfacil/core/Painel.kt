@@ -15,9 +15,13 @@ class Painel(
     fontes: List<Fonte>,
     private val pagina: String,
     private val registro: () -> String,
+    avulsos: Int, // quantos canais avulsos a TV ja tem
+    private val aoMudarAvulsos: (List<Canal>) -> Unit,
     private val aoMudar: (List<Fonte>) -> Unit,
 ) {
     var fontes = fontes
+        private set
+    var avulsos = avulsos
         private set
     var pareado = false
         private set
@@ -56,6 +60,19 @@ class Painel(
                 texto(200, "ok")
             }
             p.metodo == "GET" && p.caminho == "/registro" -> texto(200, registro())
+            // Canais avulsos: arquivo .m3u enviado pela pagina; so a quantidade volta (os links podem ter senha).
+            p.metodo == "GET" && p.caminho == "/avulsos" -> texto(200, avulsos.toString())
+            p.metodo == "POST" && p.caminho == "/avulsos" -> {
+                val canais = M3uParser.parse(p.corpo)
+                if (canais.isEmpty()) return texto(400, "nenhum canal valido no arquivo (so links http:// ou https://)")
+                if (canais.size > MAX_AVULSOS) return texto(400, "canais demais: no maximo $MAX_AVULSOS")
+                mudarAvulsos(canais)
+                texto(200, "${canais.size} canais salvos")
+            }
+            p.metodo == "DELETE" && p.caminho == "/avulsos" -> {
+                mudarAvulsos(emptyList())
+                texto(200, "ok")
+            }
             else -> texto(404, "nao existe")
         }
     }
@@ -65,8 +82,17 @@ class Painel(
         aoMudar(novas)
     }
 
+    private fun mudarAvulsos(canais: List<Canal>) {
+        avulsos = canais.size
+        aoMudarAvulsos(canais)
+    }
+
     private fun texto(codigo: Int, corpo: String) = Resposta(codigo, "text/plain; charset=utf-8", corpo)
 
     // Comparacao em tempo constante: nao da pistas do PIN/token pelo tempo de resposta.
     private fun igual(a: String, b: String) = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
+
+    companion object {
+        const val MAX_AVULSOS = 300
+    }
 }

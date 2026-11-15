@@ -45,6 +45,14 @@
     <p id="msg" class="msg" role="status"></p>
     <p class="dica">Suas listas entram como vieram, com as categorias delas. Depois de adicionar ou remover, a TV leva uns 5 minutos para atualizar os canais.</p>
 
+    <h2>Canais avulsos (arquivo .m3u)</h2>
+    <p id="avulsos" class="dica"></p>
+    <label for="arquivo">Escolha um arquivo .m3u do celular ou do notebook. Ele substitui os canais avulsos que a TV já tem:</label>
+    <input id="arquivo" type="file" accept=".m3u,.m3u8,.txt">
+    <button id="enviar">Enviar</button>
+    <button id="apagar" class="secundario">Apagar canais avulsos</button>
+    <p id="msgAvulsos" class="msg" role="status"></p>
+
     <h2>Registro</h2>
     <p class="dica">O que a TV fez nas últimas atualizações (só aparece o nome do site, nunca a senha).</p>
     <button id="atualizar" class="secundario">Atualizar registro</button>
@@ -92,6 +100,8 @@
       li.append(nome, remover);
       lista.append(li);
     }
+    const n = await pedir('GET', '/avulsos');
+    $('avulsos').textContent = n === '0' ? 'Nenhum canal avulso na TV.' : 'A TV tem ' + n + ' canais avulsos (sem teste).';
     $('registro').textContent = await pedir('GET', '/registro');
   }
 
@@ -113,7 +123,28 @@
     } catch (e) { $('msg').textContent = e.message; }
   };
 
-  $('atualizar').onclick = () => carregar().catch((e) => { $('msg').textContent = e.message; });
+  $('enviar').onclick = async () => {
+    const arquivo = $('arquivo').files[0];
+    if (!arquivo) { $('msgAvulsos').textContent = 'Escolha um arquivo primeiro.'; return; }
+    if (arquivo.size > 64 * 1024) { $('msgAvulsos').textContent = 'Arquivo grande demais (máximo 64 KB, uns 300 canais).'; return; }
+    try {
+      const r = await pedir('POST', '/avulsos', await arquivo.text());
+      $('arquivo').value = '';
+      $('msgAvulsos').textContent = r + '. A TV atualiza em uns 5 minutos.';
+      await carregar();
+    } catch (e) { $('msgAvulsos').textContent = e.message; }
+  };
+
+  $('apagar').onclick = async () => {
+    if (!confirm('Apagar todos os canais avulsos da TV?')) return;
+    try {
+      await pedir('DELETE', '/avulsos');
+      $('msgAvulsos').textContent = 'Canais avulsos apagados. A TV atualiza em uns 5 minutos.';
+      await carregar();
+    } catch (e) { $('msgAvulsos').textContent = e.message; }
+  };
+
+  $('atualizar').onclick =() => carregar().catch((e) => { $('msg').textContent = e.message; });
 </script>
 </body>
 </html>

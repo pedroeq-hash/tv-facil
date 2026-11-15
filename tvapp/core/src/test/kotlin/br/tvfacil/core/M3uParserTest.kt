@@ -149,6 +149,13 @@ class M3uParserTest {
     private fun nome(n: String) = M3uParser.parse("#EXTINF:-1,$n\nhttps://exemplo.com/a.m3u8").single().nome
 
     @Test
+    fun `ler aos pedacos - sem o limite de 5000 (lista grande de filmes)`() {
+        val texto = (1..6000).joinToString("") { "#EXTINF:-1,Filme $it\nhttps://x.com/movie/$it.mp4\n" }
+        assertEquals(6000, M3uParser.ler(texto.lineSequence()).count())
+        assertEquals(5000, M3uParser.parse(texto).size)
+    }
+
+    @Test
     fun `nome limpo - tira qualidade e etiquetas, mantem o resto`() {
         assertEquals("GloboNews", nome("GloboNews (1080p)"))
         assertEquals("ESPN (Brazil)", nome("ESPN (Brazil) (1080p)"))
@@ -160,5 +167,8 @@ class M3uParserTest {
         assertEquals("Titanic (1997)", nome("Titanic (1997)"))
         assertEquals("HDTV Notícias", nome("HDTV Notícias")) // HD dentro da palavra fica
         assertEquals("4K", nome("4K")) // so marcas: fica como estava
+        // [L] legendado, [DUB] dublado: separam versoes da mesma serie/filme, ficam
+        assertEquals("Jogos do Destino [L]", nome("Jogos do Destino [L]"))
+        assertEquals("Destan [DUB] S01E02", nome("Destan [DUB] S01E02"))
     }
 }

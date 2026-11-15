@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -70,6 +72,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import br.tvfacil.core.Biblioteca
 import br.tvfacil.core.Camada
 import br.tvfacil.core.Busca
 import br.tvfacil.core.Canal
@@ -77,6 +80,8 @@ import br.tvfacil.core.Catalogo
 import br.tvfacil.core.EstadoVideo
 import br.tvfacil.core.Fase
 import br.tvfacil.core.Grupo
+import br.tvfacil.core.Serie
+import br.tvfacil.core.Tipo
 import kotlinx.coroutines.delay
 
 // Cores e medidas do protótipo aprovado (docs/plano-tvapp.md). A tela do stick tem 853x480 dp (= protótipo / 1,5).
@@ -104,7 +109,24 @@ interface Acoes {
     fun alternarFavorito()
     fun voltarAoAnterior()
     fun mudarTermo(texto: String)
+    fun assistirFilme(canal: Canal, voltarPara: Camada, grupo: String)
+    fun abrirSerie(item: Canal, grupo: String)
 }
+
+/** O que as telas de filmes e series mostram (estado na MainActivity). tempo: lido so na barra, que redesenha 1 vez por segundo. */
+class Vod(
+    val gruposFilmes: List<Grupo>,
+    val grupoFilmes: String,
+    val gruposSeries: List<Grupo>,
+    val grupoSeries: String,
+    val serie: Serie?,
+    val temporadas: List<Grupo>,
+    val temporadaAtual: String,
+    val ultimo: Canal?,
+    val pausado: Boolean,
+    val toques: Int,
+    val tempo: () -> Pair<Long, Long>,
+)
 
 @Composable
 fun Tela(
@@ -118,6 +140,8 @@ fun Tela(
     faixa: String?,
     esperaMaximaMs: Long,
     termo: String,
+    indiceBusca: List<Pair<Canal, String>>,
+    vod: Vod,
     player: VlcPlayer,
     acoes: Acoes,
 ) {
@@ -134,7 +158,7 @@ fun Tela(
     }
     val canal = video.canal
     var barra by remember { mutableStateOf(true) }
-    LaunchedEffect(canal, camada) {
+    LaunchedEffect(canal, camada, vod.toques) {
         barra = true
         delay(BARRA_MS)
         barra = false
@@ -152,7 +176,8 @@ fun Tela(
             canais.isEmpty() -> Aviso("Lista de canais não encontrada.\n\n/sdcard/iptv/canais_ok.m3u", livre)
             video.fase == Fase.PARADO -> Aviso("Aperte OK para escolher um canal", livre)
             video.fase == Fase.ABRINDO -> Aviso("Abrindo ${canal?.nome}…", livre)
-            video.fase == Fase.INDISPONIVEL && canal != null -> Indisponivel(canal, camada == Camada.ASSISTINDO, livre, acoes)
+            video.fase == Fase.INDISPONIVEL && canal != null && camada != Camada.FILME ->
+                Indisponivel(canal, camada == Camada.ASSISTINDO, livre, acoes)
         }
         when (camada) {
             Camada.ASSISTINDO -> if (barra && canal != null && video.fase != Fase.INDISPONIVEL) {
@@ -162,10 +187,27 @@ fun Tela(
                 BarraCanal(canal, canal.url in favoritos, onde, Modifier.align(Alignment.BottomCenter))
             }
             Camada.LISTA -> ListaCanais(grupos, grupoAtual, canal, acoes)
-            Camada.BUSCA -> BuscaCanais(canais, termo, canal, acoes)
-            Camada.GRADE -> GradeCanais(grupos, grupoAtual, canal, acoes)
+            Camada.BUSCA -> BuscaCanais(indiceBusca, termo, canal, acoes)
+            Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
             Camada.CONFIGURAR -> Configurar()
-            Camada.MENU -> Menu(canal, canal?.url in favoritos, anterior, acoes, Modifier.align(Alignment.CenterEnd))
+            Camada.FILMES -> GradeCanais("Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null) { c, g ->
+                acoes.assistirFilme(c, Camada.FILMES, g)
+            }
+            Camada.SERIES -> GradeCanais("Séries", vod.gruposSeries, vod.grupoSeries, vod.serie?.comoCanal(), selo = null) { c, g ->
+                acoes.abrirSerie(c, g)
+            }
+            Camada.SERIE -> GradeCanais(
+                vod.serie?.nome ?: "", vod.temporadas, vod.temporadaAtual, vod.ultimo, selo = "ÚLTIMO",
+                sigla = { c -> Biblioteca.numero(c.nome).takeIf { it > 0 }?.toString() ?: "▶" },
+            ) { c, g -> acoes.assistirFilme(c, Camada.SERIE, g) }
+            Camada.FILME -> when {
+                video.fase == Fase.INDISPONIVEL -> Aviso("Não deu para abrir.\n\nAperte Voltar.")
+                (barra || vod.pausado) && canal != null -> BarraFilme(canal, vod.tempo, vod.pausado, Modifier.align(Alignment.BottomCenter))
+            }
+            Camada.MENU -> Menu(
+                canal, canal?.url in favoritos, anterior, vod.gruposFilmes.isNotEmpty(), vod.gruposSeries.isNotEmpty(), acoes,
+                Modifier.align(Alignment.CenterEnd),
+            )
         }
         if (faixa != null) {
             Text(
@@ -199,6 +241,39 @@ private fun BarraCanal(canal: Canal, favorito: Boolean, onde: String, modifier: 
             Dica("≡", "menu")
         }
     }
+}
+
+// Filme ou episodio: aparece ao apertar uma tecla e fica enquanto estiver pausado.
+@Composable
+private fun BarraFilme(canal: Canal, tempo: () -> Pair<Long, Long>, pausado: Boolean, modifier: Modifier) {
+    val (pos, duracao) = tempo()
+    Column(
+        modifier.padding(start = 32.dp, end = 32.dp, bottom = 27.dp).fillMaxWidth()
+            .background(PAINEL, RoundedCornerShape(13.dp)).padding(horizontal = 21.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(canal.nome, color = TEXTO, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (pausado) Text("⏸ Pausado", color = FOCO, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(Modifier.fillMaxWidth().height(6.dp).background(BORDA, RoundedCornerShape(3.dp))) {
+            if (duracao > 0) {
+                Box(Modifier.fillMaxWidth((pos.toFloat() / duracao).coerceIn(0f, 1f)).fillMaxHeight().background(FOCO, RoundedCornerShape(3.dp)))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(if (duracao > 0) "${relogio(pos)} / ${relogio(duracao)}" else relogio(pos), color = CINZA, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Dica("OK", if (pausado) "continuar" else "pausar", 12.sp)
+            Dica("◀", "−10 s", 12.sp)
+            Dica("▶", "+30 s", 12.sp)
+            Dica("Voltar", "sair", 12.sp)
+        }
+    }
+}
+
+private fun relogio(ms: Long): String {
+    val s = ms / 1000
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
 
 @Composable
@@ -272,8 +347,8 @@ private fun ListaCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, 
 }
 
 @Composable
-private fun BuscaCanais(canais: List<Canal>, termo: String, atual: Canal?, acoes: Acoes) {
-    val resultados = remember(canais, termo) { Busca.filtrar(canais, termo) }
+private fun BuscaCanais(indice: List<Pair<Canal, String>>, termo: String, atual: Canal?, acoes: Acoes) {
+    val resultados = remember(indice, termo) { Busca.filtrar(indice, termo) }
     val campo = remember { FocusRequester() }
     var campoFocado by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -284,7 +359,7 @@ private fun BuscaCanais(canais: List<Canal>, termo: String, atual: Canal?, acoes
         Modifier.fillMaxHeight().width(LARGURA_LISTA).background(PAINEL).padding(horizontal = 21.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        Text("Buscar canal", color = TEXTO, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text("Buscar", color = TEXTO, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         BasicTextField(
             value = termo,
             onValueChange = acoes::mudarTermo,
@@ -295,19 +370,29 @@ private fun BuscaCanais(canais: List<Canal>, termo: String, atual: Canal?, acoes
             modifier = Modifier.fillMaxWidth().focusRequester(campo).onFocusChanged { campoFocado = it.isFocused }
                 .border(3.dp, if (campoFocado) FOCO else BORDA, RoundedCornerShape(9.dp)).padding(12.dp),
             decorationBox = { texto ->
-                if (termo.isEmpty()) Text("nome do canal", color = CINZA, fontSize = 22.sp)
+                if (termo.isEmpty()) Text("canal, filme ou série", color = CINZA, fontSize = 22.sp)
                 texto()
             },
         )
         when {
-            termo.isBlank() -> Text("Aperte OK para digitar o nome do canal.", color = CINZA, fontSize = 16.sp)
-            resultados.isEmpty() -> Text("Nenhum canal com “$termo”", color = CINZA, fontSize = 16.sp)
+            termo.isBlank() -> Text("Aperte OK para digitar o nome do canal, do filme ou da série.", color = CINZA, fontSize = 16.sp)
+            resultados.isEmpty() -> Text("Nada com “$termo”", color = CINZA, fontSize = 16.sp)
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             items(resultados) { c ->
                 // Mesma regra da lista: 1º OK troca o video, OK no canal que ja esta no ar fecha.
-                ItemCanal(c, noAr = c == atual, Modifier, detalhe = Catalogo.grupoDe(c)) {
-                    if (c == atual) acoes.mostrar(Camada.ASSISTINDO) else acoes.escolher(c, Catalogo.grupoDe(c), fecharLista = false)
+                val detalhe = when (c.tipo) {
+                    Tipo.AO_VIVO -> Catalogo.grupoDe(c)
+                    Tipo.FILME -> "Filme · ${c.grupo}"
+                    Tipo.SERIE -> "Série · ${c.grupo}"
+                }
+                ItemCanal(c, noAr = c == atual, Modifier, detalhe = detalhe) {
+                    when {
+                        c.tipo == Tipo.FILME -> acoes.assistirFilme(c, Camada.BUSCA, c.grupo)
+                        c.tipo == Tipo.SERIE -> acoes.abrirSerie(c, c.grupo)
+                        c == atual -> acoes.mostrar(Camada.ASSISTINDO)
+                        else -> acoes.escolher(c, Catalogo.grupoDe(c), fecharLista = false)
+                    }
                 }
             }
         }
@@ -343,16 +428,25 @@ private fun ItemCanal(canal: Canal, noAr: Boolean, modifier: Modifier, detalhe: 
 }
 
 @Composable
-private fun NoAr(modifier: Modifier = Modifier) {
+private fun NoAr(modifier: Modifier = Modifier, texto: String = "NO AR") {
     Text(
-        "NO AR", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        texto, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
         modifier = modifier.background(Color(0xFFE5484D), RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
     )
 }
 
 // Tela cheia (cobre o video; o som continua): grupos a esquerda, cartoes a direita. OK no cartao assiste e fecha.
+// Serve para canais, filmes, series e episodios. selo: marca no cartao "atual" (null = sem marca, so o foco).
 @Composable
-private fun GradeCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, acoes: Acoes) {
+private fun GradeCanais(
+    titulo: String,
+    grupos: List<Grupo>,
+    grupoAtual: String,
+    atual: Canal?,
+    selo: String? = "NO AR",
+    sigla: (Canal) -> String = { Catalogo.sigla(it.nome) },
+    aoEscolher: (Canal, String) -> Unit,
+) {
     if (grupos.isEmpty()) return
     var indice by remember { mutableIntStateOf(grupos.indexOfFirst { it.nome == grupoAtual }.coerceAtLeast(0)) }
     val grupo = grupos[indice.coerceIn(grupos.indices)]
@@ -371,11 +465,12 @@ private fun GradeCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, 
     Row(Modifier.fillMaxSize().background(FUNDO)) {
         // Padrao de TV: o grupo que recebe o foco (▲▼ nesta coluna) e o que aparece na grade.
         Column(
-            Modifier.fillMaxHeight().width(200.dp).background(LATERAL).padding(horizontal = 13.dp, vertical = 24.dp)
+            Modifier.fillMaxHeight().width(200.dp).background(LATERAL).verticalScroll(rememberScrollState())
+                .padding(horizontal = 13.dp, vertical = 24.dp)
                 .focusRestorer(grupoFoco), // vindo da grade com ◀, cai no grupo atual
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text("Todos os canais", color = TEXTO, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 11.dp, bottom = 9.dp))
+            Text(titulo, color = TEXTO, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 11.dp, bottom = 9.dp))
             grupos.forEachIndexed { i, g ->
                 val escolhido = i == indice
                 Surface(
@@ -410,7 +505,7 @@ private fun GradeCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, 
             ) {
                 items(grupo.canais.size) { i ->
                     val c = grupo.canais[i]
-                    CartaoCanal(c, noAr = c == atual, if (i == alvo) Modifier.focusRequester(foco) else Modifier) { acoes.escolher(c, grupo.nome) }
+                    CartaoCanal(c, sigla(c), if (c == atual) selo else null, if (i == alvo) Modifier.focusRequester(foco) else Modifier) { aoEscolher(c, grupo.nome) }
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -423,7 +518,7 @@ private fun GradeCanais(grupos: List<Grupo>, grupoAtual: String, atual: Canal?, 
 }
 
 @Composable
-private fun CartaoCanal(canal: Canal, noAr: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun CartaoCanal(canal: Canal, sigla: String, selo: String?, modifier: Modifier, onClick: () -> Unit) {
     var focado by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
@@ -440,40 +535,42 @@ private fun CartaoCanal(canal: Canal, noAr: Boolean, modifier: Modifier, onClick
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
             ) {
                 Box(Modifier.size(43.dp).background(if (focado) FOCO else SELO, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                    Text(Catalogo.sigla(canal.nome), color = if (focado) SOBRE_FOCO else TEXTO, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(sigla, color = if (focado) SOBRE_FOCO else TEXTO, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(canal.nome, fontSize = 14.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (noAr) NoAr(Modifier.align(Alignment.TopEnd).padding(5.dp))
+            if (selo != null) NoAr(Modifier.align(Alignment.TopEnd).padding(5.dp), selo)
         }
     }
 }
 
 @Composable
-private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, acoes: Acoes, modifier: Modifier) {
+private fun Menu(canal: Canal?, favorito: Boolean, anterior: Canal?, temFilmes: Boolean, temSeries: Boolean, acoes: Acoes, modifier: Modifier) {
     val foco = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         delay(50)
         runCatching { foco.requestFocus() }
     }
+    // Ate 7 botoes nao cabem nos 480 dp da tela: a coluna rola junto com o foco.
     Column(
-        modifier.fillMaxHeight().width(320.dp).background(PAINEL).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(13.dp),
+        modifier.fillMaxHeight().width(320.dp).background(PAINEL).verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text("Menu", color = TEXTO, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        if (canal != null) Text(canal.nome, color = CINZA, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(8.dp))
-        Botao("Buscar canal", Modifier.focusRequester(foco)) { acoes.mostrar(Camada.BUSCA) }
+        if (canal != null && canal.tipo == Tipo.AO_VIVO) Text(canal.nome, color = CINZA, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Dica("Voltar", "fechar o menu")
+        Spacer(Modifier.height(4.dp))
+        Botao("Buscar", Modifier.focusRequester(foco)) { acoes.mostrar(Camada.BUSCA) }
         Botao("Todos os canais") { acoes.mostrar(Camada.GRADE) }
+        if (temFilmes) Botao("Filmes") { acoes.mostrar(Camada.FILMES) }
+        if (temSeries) Botao("Séries") { acoes.mostrar(Camada.SERIES) }
         if (canal != null) {
             Botao(if (favorito) "Tirar dos favoritos" else "★ Favoritar") { acoes.alternarFavorito() }
         }
         if (anterior != null) {
             Botao("Canal anterior:\n${anterior.nome}") { acoes.voltarAoAnterior() }
         }
-        Botao("Configurar pelo celular") { acoes.mostrar(Camada.CONFIGURAR) }
-        Spacer(Modifier.weight(1f))
-        Dica("Voltar", "fechar o menu")
+        Botao("Configurar") { acoes.mostrar(Camada.CONFIGURAR) }
     }
 }
 
@@ -490,13 +587,13 @@ private fun Configurar() {
         Modifier.fillMaxSize().background(FUNDO).padding(horizontal = 48.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Configurar pelo celular", color = TEXTO, fontSize = 29.sp, fontWeight = FontWeight.Bold)
+        Text("Configurar", color = TEXTO, fontSize = 29.sp, fontWeight = FontWeight.Bold)
         val ip = servidor.ip
         if (ip == null) {
             Text("A TV não está conectada a uma rede Wi-Fi.", color = TEXTO, fontSize = 22.sp)
         } else {
-            Text("1. Conecte o celular no mesmo Wi-Fi da TV.", color = CINZA, fontSize = 20.sp)
-            Text("2. No navegador do celular, abra:", color = CINZA, fontSize = 20.sp)
+            Text("1. Conecte o celular ou o notebook no mesmo Wi-Fi da TV.", color = CINZA, fontSize = 20.sp)
+            Text("2. No navegador, abra:", color = CINZA, fontSize = 20.sp)
             Text("http://$ip:${ServidorConfig.PORTA}", color = FOCO, fontSize = 34.sp, fontWeight = FontWeight.Bold)
             Text("3. Digite o PIN:", color = CINZA, fontSize = 20.sp)
             Text(servidor.pin, color = FOCO, fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = 6.sp)

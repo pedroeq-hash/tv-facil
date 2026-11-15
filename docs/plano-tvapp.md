@@ -136,6 +136,44 @@ O stick vai para outra casa. Quem configura é o filho da usuária, e ele quer p
   - o código que lê o pedido fica no `:core`, com testes.
 - **Item 2 (nomes na página):** a página só usa `textContent`, nunca `innerHTML`.
 
+### Canais avulsos: enviar um arquivo .m3u pela página (0.24)
+**Por quê:** algumas listas existem só como arquivo, com usuário e senha nos links dos canais, e não podem virar um link público. O `extras.m3u` do Termux não serviria: desde a 0.22 o app usa a própria lista, e o `TesteJob` só lê links. Em 14/11/2026, esse arquivo nem existia no stick. Com esta função, o arquivo vai do note ou do celular direto para a TV.
+
+**Como funciona:** a página ganha as rotas `GET`, `POST` e `DELETE` em `/avulsos`. Cada envio **substitui** o anterior. Os canais entram na frente das listas próprias e, como elas, **sem teste**.
+
+**Regras de segurança:**
+- **Itens 6 e 7:** as três rotas exigem `X-Token`. Valem as mesmas regras de `Host`, `Origin`, PIN e token das outras rotas.
+- **Tamanho do pedido:** o corpo passa de 4 KB para **64 KB**, porque uma lista com cerca de 300 canais não cabe em 4 KB.
+  - O corpo é lido antes de conferir o token. Isso é aceitável porque o servidor atende uma conexão por vez, desiste em 10 s e só existe com a tela aberta. Além disso, 64 KB não pesa na memória.
+- **Item 2 (conteúdo não confiável):** o texto passa pelo `M3uParser`, que aceita só `http`/`https`, URL de até 2048 caracteres, nomes sem caracteres de controle ou de inversão de texto e tamanhos cortados. O limite é de **300 canais** avulsos.
+  - Se o arquivo não tiver nenhum canal válido ou tiver canais demais, a TV responde 400 e **nada muda**: a lista anterior continua.
+  - A TV guarda **a lista já filtrada e reescrita** (`TesteCanais.m3u`), nunca o texto recebido. Na leitura, a lista passa de novo pelo `M3uParser`.
+- **Itens 1 e 9 (senha nos links):** o arquivo fica só em `filesDir/extras.m3u`, que é privado e tem `allowBackup=false`. Ele nunca vai para o `/sdcard`. A página e o log mostram **só a quantidade** de canais, nunca um link.
+- **Limite conhecido:** um canal pode apontar para um IP da rede de casa, como já acontece nas listas próprias.
+  - Só o VLC abre esse link, e só quem tem o PIN consegue enviá-lo.
+  - Se a página ganhar mais poder, recusar IPs privados também na URL dos canais.
+
+### Filmes e séries de lista própria (0.25)
+**Por quê:** a lista do colega tem 85 MB e 316 mil itens (30 mil filmes e 286 mil episódios de 8,4 mil séries). Até a 0.23 o app baixava só 15 MB e guardava 5000 itens, todos como canais. O app tem 128 MB de memória, então a lista inteira não cabe na memória de uma vez.
+
+**Como funciona:** um job do Android, 1 vez por dia, baixa a lista própria direto para um arquivo e a lê aos pedaços. A leitura separa:
+- canais ao vivo → `proprias_aovivo.m3u`;
+- filmes → `filmes.m3u`;
+- episódios → um arquivo por série, mais o índice `series.tsv`.
+
+A tela carrega só os filmes e o índice das séries. Os episódios de uma série são lidos do disco quando ela é aberta.
+
+**Regras de segurança:**
+- **Item 2 (conteúdo não confiável):** todo item passa pelo `M3uParser`: só `http`/`https`, URL de até 2048 caracteres, sem caracteres invisíveis, nomes cortados. As listas públicas continuam sendo tratadas como canais, como antes.
+- **Disco e memória:**
+  - o download é gravado aos pedaços, até **200 MB**, contados já descompactados (vale para resposta gzip). Se passar disso ou falhar, a biblioteca anterior continua inteira;
+  - limites: 60 mil filmes, 20 mil séries, 5 mil episódios por série, 5 mil canais ao vivo;
+  - a lista inteira nunca fica na memória.
+- **Nomes de arquivo:** o arquivo de cada série é `series/<número>.m3u`. O número é gerado pelo app e nunca vem do texto da lista, então `../` não tem efeito.
+- **Índice `series.tsv`:** os nomes chegam sem tab e sem quebra de linha, porque o `M3uParser` tira `\p{Cc}`. Linha estragada é ignorada. Há teste com nome malicioso.
+- **Itens 1 e 9 (senha nos links):** tudo fica em `filesDir`, que é privado e tem `allowBackup=false`. A posição de "continuar de onde parou" vai para `SharedPreferences` privado. O log mostra só o domínio e as contagens.
+- **Troca atômica:** a biblioteca nova é montada em `biblioteca.novo/` e só substitui a antiga no fim. Quem lê nunca pega uma biblioteca pela metade.
+
 **Ordem sugerida:**
 1. Proteger o que já existe: itens 1, 3 e 4, em TDD no `:core`, mais o `curl --proto`.
 2. Fazer a 7a (pipeline dentro do app, com o log).

@@ -1,6 +1,6 @@
 package br.tvfacil.core
 
-enum class Tipo { AO_VIVO, FILME }
+enum class Tipo { AO_VIVO, FILME, SERIE } // SERIE: cartao/resultado que representa a serie inteira (url = id)
 
 data class Canal(
     val nome: String,

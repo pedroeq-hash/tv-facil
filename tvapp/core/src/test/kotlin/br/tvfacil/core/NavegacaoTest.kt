@@ -77,4 +77,44 @@ class NavegacaoTest {
         assertEquals(Reacao(MENU), Navegacao.reagir(Camada.CONFIGURAR, Tecla.MENU))
         assertNull(Navegacao.reagir(Camada.CONFIGURAR, Tecla.OK))
     }
+
+    @Test
+    fun `setas so viram tecla para o filme - fora dele seguem para o foco`() {
+        assertEquals(Tecla.ESQUERDA, Navegacao.tecla(21))
+        assertEquals(Tecla.DIREITA, Navegacao.tecla(22))
+        for (camada in listOf(ASSISTINDO, LISTA, GRADE, Camada.FILMES, Camada.SERIES, Camada.SERIE)) {
+            assertNull(Navegacao.reagir(camada, Tecla.ESQUERDA), "$camada")
+            assertNull(Navegacao.reagir(camada, Tecla.DIREITA), "$camada")
+        }
+    }
+
+    @Test
+    fun `filmes e series - grade como a de canais`() {
+        for (camada in listOf(Camada.FILMES, Camada.SERIES)) {
+            assertEquals(Reacao(ASSISTINDO), Navegacao.reagir(camada, Tecla.VOLTAR))
+            assertEquals(Reacao(MENU), Navegacao.reagir(camada, Tecla.MENU))
+            assertNull(Navegacao.reagir(camada, Tecla.OK))
+            assertNull(Navegacao.reagir(camada, Tecla.CANAL_MAIS))
+        }
+    }
+
+    @Test
+    fun `serie - Voltar volta para a grade de series`() {
+        assertEquals(Reacao(Camada.SERIES), Navegacao.reagir(Camada.SERIE, Tecla.VOLTAR))
+        assertEquals(Reacao(MENU), Navegacao.reagir(Camada.SERIE, Tecla.MENU))
+        assertNull(Navegacao.reagir(Camada.SERIE, Tecla.OK))
+    }
+
+    @Test
+    fun `filme - OK pausa, setas pulam, CH nao troca nada, Voltar volta de onde veio`() {
+        val f = Camada.FILME
+        assertEquals(Reacao(f, Efeito.PAUSAR), Navegacao.reagir(f, Tecla.OK))
+        assertEquals(Reacao(f, Efeito.VOLTAR_10S), Navegacao.reagir(f, Tecla.ESQUERDA))
+        assertEquals(Reacao(f, Efeito.AVANCAR_30S), Navegacao.reagir(f, Tecla.DIREITA))
+        assertEquals(Reacao(f, Efeito.MOSTRAR_BARRA), Navegacao.reagir(f, Tecla.MENU))
+        assertEquals(Reacao(f), Navegacao.reagir(f, Tecla.CANAL_MAIS))
+        assertEquals(Reacao(f), Navegacao.reagir(f, Tecla.CANAL_MENOS))
+        assertEquals(Reacao(Camada.FILMES, Efeito.SAIR_FILME), Navegacao.reagir(f, Tecla.VOLTAR))
+        assertEquals(Reacao(Camada.SERIE, Efeito.SAIR_FILME), Navegacao.reagir(f, Tecla.VOLTAR, voltarPara = Camada.SERIE))
+    }
 }

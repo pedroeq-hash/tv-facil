@@ -8,7 +8,7 @@ data class Pedido(val metodo: String, val caminho: String, val cabecalhos: Map<S
 /** Le um pedido HTTP vindo da rede (nao confiavel): pequeno, simples, e null se algo estiver errado. */
 object Http {
     private const val MAX_CABECALHO = 8 * 1024
-    private const val MAX_CORPO = 4 * 1024
+    private const val MAX_CORPO = 64 * 1024 // cabe um arquivo .m3u de canais avulsos (~300 canais)
 
     fun ler(entrada: InputStream): Pedido? {
         val cabecalho = lerAteLinhaVazia(entrada) ?: return null

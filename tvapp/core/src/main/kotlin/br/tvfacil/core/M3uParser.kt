@@ -19,9 +19,10 @@ object M3uParser {
 
     private fun limpa(texto: String, max: Int) = texto.replace(invisiveis, "").trim().take(max)
 
-    // Nome limpo: "GloboNews (1080p)" -> "GloboNews". Tira etiquetas [..] e marcas de qualidade; o resto entre () fica (ex.: ano do filme).
+    // Nome limpo: "GloboNews (1080p)" -> "GloboNews". Tira as etiquetas da iptv-org e marcas de qualidade; o resto fica
+    // (ano do filme; [L] legendado e [DUB] dublado separam versoes da mesma serie).
     private const val MARCA = """(\d{3,4}[pi](\d{2})?|[fu]?hd|uhd|4k|sd|h\.?26[45]|hevc)"""
-    private val colchetes = Regex("""\[[^\]]*]""")
+    private val colchetes = Regex("""\[(geo-blocked|not 24/7)]""", RegexOption.IGNORE_CASE)
     private val marcaEntreParenteses = Regex("""\(\s*$MARCA\s*\)""", RegexOption.IGNORE_CASE)
     private val marcasNoFim = Regex("""(\s+$MARCA)+\s*$""", RegexOption.IGNORE_CASE)
     private val espacos = Regex("""\s+""")
@@ -31,11 +32,12 @@ object M3uParser {
 
     private fun aceita(url: String) = url.length <= MAX_URL && urlAceita.matches(url)
 
-    fun parse(texto: String): List<Canal> {
-        val canais = mutableListOf<Canal>()
+    fun parse(texto: String): List<Canal> = ler(texto.lineSequence()).take(MAX_CANAIS).toList()
+
+    /** Aos pedacos e sem limite de quantidade (quem chama corta): lista de filmes/series de 85 MB nao cabe na memoria. */
+    fun ler(linhas: Sequence<String>): Sequence<Canal> = sequence {
         var atual: Canal? = null
-        for (bruta in texto.lines()) {
-            if (canais.size >= MAX_CANAIS) break
+        for (bruta in linhas) {
             val linha = bruta.trim()
             when {
                 linha.isEmpty() -> Unit
@@ -46,12 +48,11 @@ object M3uParser {
                     atual = atual?.copy(referrer = limpa(linha.substringAfter("="), MAX_OPCAO))
                 linha.startsWith("#") -> Unit
                 atual != null -> {
-                    if (aceita(linha)) canais += atual.copy(url = linha)
+                    if (aceita(linha)) yield(atual.copy(url = linha))
                     atual = null
                 }
             }
         }
-        return canais
     }
 
     private fun lerExtinf(linha: String): Canal {

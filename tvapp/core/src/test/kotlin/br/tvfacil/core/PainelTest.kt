@@ -3,13 +3,22 @@ package br.tvfacil.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PainelTest {
     private val endereco = "10.0.0.20:8765"
     private var salvas: List<Fonte>? = null
+    private var avulsosSalvos: List<Canal>? = null
     private val publica = Fonte("https://iptv-org.github.io/iptv/countries/br.m3u", false)
-    private val painel = Painel(endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "<html>pagina</html>", registro = { "linha do log" }) { salvas = it }
+    private val painel = Painel(
+        endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "<html>pagina</html>",
+        registro = { "linha do log" }, avulsos = 2, aoMudarAvulsos = { avulsosSalvos = it },
+    ) { salvas = it }
+
+    // Arquivo .m3u com n canais; por padrao com usuario e senha no link, como nas listas pagas.
+    private fun m3u(n: Int, url: (Int) -> String = { "http://srv.com:8080/joao/segredo/$it" }) =
+        "#EXTM3U\n" + (1..n).joinToString("") { "#EXTINF:-1 group-title=\"Globo\",Canal $it\n${url(it)}\n" }
 
     private fun pedido(metodo: String, caminho: String, corpo: String = "", vararg extras: Pair<String, String>) =
         Pedido(metodo, caminho, mapOf("host" to endereco) + extras, corpo)
@@ -71,6 +80,42 @@ class PainelTest {
         assertEquals(emptyList(), salvas)
         assertEquals(404, painel.responder(comToken("DELETE", "/listas/0")).codigo)
         assertEquals(404, painel.responder(comToken("DELETE", "/listas/abc")).codigo)
+    }
+
+    @Test
+    fun `canais avulsos so com o token`() {
+        assertEquals(401, painel.responder(pedido("GET", "/avulsos")).codigo)
+        assertEquals(401, painel.responder(pedido("POST", "/avulsos", m3u(1))).codigo)
+        assertEquals(401, painel.responder(pedido("DELETE", "/avulsos")).codigo)
+        assertNull(avulsosSalvos)
+    }
+
+    @Test
+    fun `recebe o arquivo m3u, conta os canais e nao devolve a senha`() {
+        assertEquals("2", painel.responder(comToken("GET", "/avulsos")).corpo)
+        val r = painel.responder(comToken("POST", "/avulsos", m3u(9)))
+        assertEquals(200 to "9 canais salvos", r.codigo to r.corpo)
+        assertEquals(9, avulsosSalvos!!.size)
+        assertEquals("Canal 1", avulsosSalvos!![0].nome)
+        assertEquals("9", painel.responder(comToken("GET", "/avulsos")).corpo)
+        assertFalse(listOf("/avulsos", "/listas", "/registro").any { "segredo" in painel.responder(comToken("GET", it)).corpo })
+    }
+
+    @Test
+    fun `arquivo sem canal valido ou com canais demais e recusado e nada muda`() {
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", "")).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(3) { "file:///sdcard/$it.ts" })).codigo)
+        assertEquals(400, painel.responder(comToken("POST", "/avulsos", m3u(301))).codigo)
+        assertNull(avulsosSalvos)
+        assertEquals("2", painel.responder(comToken("GET", "/avulsos")).corpo)
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos", m3u(300))).codigo)
+    }
+
+    @Test
+    fun `apagar limpa os canais avulsos`() {
+        assertEquals(200, painel.responder(comToken("DELETE", "/avulsos")).codigo)
+        assertEquals(emptyList(), avulsosSalvos)
+        assertEquals("0", painel.responder(comToken("GET", "/avulsos")).corpo)
     }
 
     @Test

@@ -24,13 +24,19 @@ class HttpTest {
     }
 
     @Test
+    fun `corpo de ate 64 KB passa (arquivo m3u de canais avulsos)`() {
+        val p = ler("POST /avulsos HTTP/1.1\r\nHost: x\r\nContent-Length: 65536\r\n\r\n" + "a".repeat(65536))!!
+        assertEquals(65536, p.corpo.length)
+    }
+
+    @Test
     fun `pedido malformado ou grande demais vira null`() {
         assertNull(ler(""))
         assertNull(ler("lixo sem quebra de linha"))
         assertNull(ler("GET\r\n\r\n"))
         assertNull(ler("GET /a HTTP/1.1\r\nCabecalho sem dois pontos\r\n\r\n"))
         assertNull(ler("GET /a HTTP/1.1\r\nX: " + "a".repeat(9000) + "\r\n\r\n"))
-        assertNull(ler("POST /a HTTP/1.1\r\nContent-Length: 5000\r\n\r\n" + "a".repeat(5000)))
+        assertNull(ler("POST /a HTTP/1.1\r\nContent-Length: 65537\r\n\r\n" + "a".repeat(65537)))
         assertNull(ler("POST /a HTTP/1.1\r\nContent-Length: abc\r\n\r\n"))
         assertNull(ler("POST /a HTTP/1.1\r\nContent-Length: 10\r\n\r\ncurto")) // corpo acabou antes
     }
