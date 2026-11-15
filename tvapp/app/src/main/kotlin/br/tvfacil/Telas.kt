@@ -137,6 +137,7 @@ class Vod(
     val termo: String, // busca no topo de Filmes / Series
     val indiceFilmes: List<Pair<Canal, String>>,
     val indiceSeries: List<Pair<Canal, String>>,
+    val carregando: Boolean, // lendo filmes e series (1a abertura depois de ligar o stick)
 )
 
 @Composable
@@ -202,13 +203,15 @@ fun Tela(
             Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
             // Categorias que o app ja tem na memoria (as escondidas o Painel acrescenta): ler os 30 mil filmes do disco levava 13 s.
             Camada.CONFIGURAR -> Configurar(vod.gruposFilmes.map { it.nome }.filter { it != CONTINUAR } + vod.gruposSeries.map { it.nome })
-            Camada.FILMES -> GradeCanais(
+            Camada.FILMES, Camada.SERIES -> if (vod.carregando && vod.gruposFilmes.isEmpty() && vod.gruposSeries.isEmpty()) {
+                Aviso("Carregando filmes e séries…\n\nAparecem sozinhos em alguns segundos.")
+            } else if (camada == Camada.FILMES) GradeCanais(
                 "Filmes", vod.gruposFilmes, vod.grupoFilmes, vod.ultimo, selo = null,
                 busca = BuscaGrade(vod.termo, "buscar filme", vod.indiceFilmes, acoes::mudarTermoGrade),
             ) { c, g ->
                 acoes.assistirFilme(c, Camada.FILMES, g)
             }
-            Camada.SERIES -> GradeCanais(
+            else GradeCanais(
                 "Séries", vod.gruposSeries, vod.grupoSeries, vod.serie?.comoCanal(), selo = null,
                 busca = BuscaGrade(vod.termo, "buscar série", vod.indiceSeries, acoes::mudarTermoGrade),
             ) { c, g ->
@@ -223,7 +226,7 @@ fun Tela(
                 (barra || vod.pausado) && canal != null -> BarraFilme(canal, vod.tempo, vod.previa, vod.pausado, Modifier.align(Alignment.BottomCenter))
             }
             Camada.MENU -> Menu(
-                canal, canal?.url in favoritos, anterior, vod.gruposFilmes.isNotEmpty(), vod.gruposSeries.isNotEmpty(), acoes,
+                canal, canal?.url in favoritos, anterior, vod.gruposFilmes.isNotEmpty() || vod.carregando, vod.gruposSeries.isNotEmpty() || vod.carregando, acoes,
                 Modifier.align(Alignment.CenterEnd),
             )
         }

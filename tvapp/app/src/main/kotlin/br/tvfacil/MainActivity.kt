@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity(), Acoes {
     // Filmes e series (listas proprias; ver Arquivos e TesteJob).
     private var filmes by mutableStateOf(emptyList<Canal>())
     private var series by mutableStateOf(emptyList<Serie>())
+    private var carregandoBiblioteca by mutableStateOf(false) // menu mostra Filmes/Series com "Carregando..."
     private var emAndamento by mutableStateOf(emptySet<String>()) // URLs com "continuar de onde parou"
     private val gruposFilmes by derivedStateOf {
         val andamento = filmes.filter { it.url in emAndamento }
@@ -141,7 +143,7 @@ class MainActivity : ComponentActivity(), Acoes {
                 CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = ATKINSON)) {
                     val vod = Vod(
                         gruposFilmes, grupoFilmes, gruposSeries, grupoSeries, serieAberta, temporadas, temporadaAtual,
-                        ultimoVod, pausado, toques, { tempo }, previa, termoGrade, indiceFilmes, indiceSeries,
+                        ultimoVod, pausado, toques, { tempo }, previa, termoGrade, indiceFilmes, indiceSeries, carregandoBiblioteca,
                     )
                     Tela(canais, grupos, grupoAtual, favoritos, video, camada, anterior, faixa, esperaMaximaMs, termo, indiceCanais, vod, player, this)
                 }
@@ -423,34 +425,38 @@ class MainActivity : ComponentActivity(), Acoes {
     private fun marcaBiblioteca() =
         listOf(Arquivos.filmes(this).lastModified(), Arquivos.series(this).lastModified(), Arquivos.escondidas(this).lastModified())
 
+    /**
+     * Le filmes e series so quando os arquivos mudam; a leitura fica no processo (BibliotecaLida), entao fechar e
+     * abrir o app nao rele os 30 mil filmes (levava 15-30 s, e Filmes/Series sumiam do menu nesse tempo).
+     * Se a leitura falhar (ex.: o TesteJob trocando a biblioteca), fica a anterior e tenta de novo no proximo minuto.
+     */
     // shortcut: le os 30 mil filmes de uma vez (~5 MB); se a memoria apertar, ler so os nomes e buscar o resto ao abrir.
     private suspend fun lerBiblioteca() {
-        val (f, s) = withContext(Dispatchers.IO) {
-            bibliotecaLidaEm = marcaBiblioteca()
-            val esconde = Escondidas.filtro(Arquivos.lerEscondidas(this@MainActivity)) // ex.: Brasil Paralelo
-            val f = runCatching { Arquivos.filmes(this@MainActivity).useLines { M3uParser.ler(it).take(Biblioteca.MAX_FILMES).toList() } }
-                .getOrDefault(emptyList()).filterNot { it.url in bloqueados || esconde(it.grupo) }
-            val s = runCatching {
-                val arquivo = Arquivos.series(this@MainActivity)
-                require(arquivo.length() <= 5_000_000) // o indice da lista do colega tem ~400 KB
-                Biblioteca.lerIndice(arquivo.readText()).take(Biblioteca.MAX_SERIES).filterNot { esconde(it.categoria) }
-            }.getOrDefault(emptyList())
-            f to s
+        val marca = withContext(Dispatchers.IO) { marcaBiblioteca() }
+        bibliotecaLidaEm = marca
+        if (marca != BibliotecaLida.marca) {
+            carregandoBiblioteca = true
+            val inicio = SystemClock.elapsedRealtime()
+            val lida = withContext(Dispatchers.IO) { runCatching { BibliotecaLida.ler(this@MainActivity, marca) } }
+            carregandoBiblioteca = false
+            lida.onFailure {
+                Log.w("TVFacil", "biblioteca nao lida (${it.javaClass.simpleName}); tenta de novo em 1 min")
+                bibliotecaLidaEm = emptyList() // forca nova tentativa no relerSeMudou
+                return
+            }
+            BibliotecaLida.guardar(lida.getOrThrow())
+            Log.i("TVFacil", "biblioteca lida em ${SystemClock.elapsedRealtime() - inicio} ms")
         }
-        filmes = f
-        series = s
-        atualizarBusca()
+        // Filmes que derrubaram o app (bloqueados) mudam a cada abertura: filtra aqui, e barato.
+        filmes = BibliotecaLida.filmes.filterNot { it.url in bloqueados }
+        series = BibliotecaLida.series
+        indiceFilmes = BibliotecaLida.indiceFilmes.filterNot { it.first.url in bloqueados }
+        indiceSeries = BibliotecaLida.indiceSeries
     }
 
     private fun atualizarBusca() {
-        val (c, f, s) = Triple(canais.orEmpty(), filmes, series.map { it.comoCanal() })
-        lifecycleScope.launch {
-            withContext(Dispatchers.Default) { Triple(Busca.indice(c), Busca.indice(f), Busca.indice(s)) }.let { (ic, ifi, ise) ->
-                indiceCanais = ic
-                indiceFilmes = ifi
-                indiceSeries = ise
-            }
-        }
+        val c = canais.orEmpty()
+        lifecycleScope.launch { indiceCanais = withContext(Dispatchers.Default) { Busca.indice(c) } }
     }
 
     private fun carregar() {
@@ -458,6 +464,7 @@ class MainActivity : ComponentActivity(), Acoes {
         lifecycleScope.launch {
             val lista = lerLista()
             canais = lista
+            atualizarBusca()
             launch { lerBiblioteca() } // depois do canal: nao atrasa a abertura
             if (intent.getBooleanExtra("diagnostico", false)) {
                 diagnosticar(lista, intent.getIntExtra("inicio", 0))

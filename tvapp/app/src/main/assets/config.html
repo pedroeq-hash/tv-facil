@@ -28,6 +28,16 @@
   #resumo li.alerta { border-left: 4px solid var(--foco); }
   details { margin-top: 16px; }
   summary { cursor: pointer; color: var(--cinza); font-size: 15px; }
+  details.bloco { margin-top: 28px; }
+  details.bloco > summary { list-style: none; color: var(--texto); }
+  details.bloco > summary::-webkit-details-marker { display: none; }
+  details.bloco > summary h2 { display: inline; margin: 0; }
+  details.bloco > summary::before { content: '▸ '; color: var(--foco); font-size: 21px; }
+  details.bloco[open] > summary::before { content: '▾ '; }
+  li[hidden] { display: none; } /* o display:flex do li venceria o atributo hidden */
+  .conta { color: var(--cinza); font-size: 15px; font-weight: normal; }
+  .rolagem { max-height: 50vh; overflow-y: auto; margin-top: 8px; padding-right: 4px; }
+  .oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--cinza); background: var(--cartao); padding: 12px; border-radius: 8px; max-height: 50vh; overflow: auto; }
 </style>
 </head>
@@ -64,10 +74,14 @@
     <button id="apagar" class="secundario">Apagar canais avulsos</button>
     <p id="msgAvulsos" class="msg" role="status"></p>
 
-    <h2>Categorias escondidas</h2>
-    <p class="dica">Marque as categorias de filmes e séries que <strong>não</strong> devem aparecer na TV. Vale em até 1 minuto, sem baixar nada de novo.</p>
-    <ul id="categorias"></ul>
-    <p id="msgCategorias" class="msg" role="status"></p>
+    <details id="blocoCategorias" class="bloco">
+      <summary><h2>Categorias escondidas <span id="contaEscondidas" class="conta"></span></h2></summary>
+      <p class="dica">Marque as categorias de filmes e séries que <strong>não</strong> devem aparecer na TV. Vale em até 1 minuto, sem baixar nada de novo.</p>
+      <label for="filtroCategorias" class="oculto">Procurar categoria</label>
+      <input id="filtroCategorias" type="search" autocomplete="off" placeholder="Procurar categoria…">
+      <ul id="categorias" class="rolagem"></ul>
+      <p id="msgCategorias" class="msg" role="status"></p>
+    </details>
 
     <h2>O que a TV fez</h2>
     <p class="dica">As últimas atualizações, a mais nova primeiro (horário da TV). Só aparece o nome do site, nunca a senha.</p>
@@ -156,6 +170,8 @@
     });
     if (!caixas.length) caixas.push(texto('Nenhum filme ou série ainda (aparecem depois que a TV baixa as suas listas).'));
     $('categorias').replaceChildren(...caixas);
+    contarEscondidas();
+    filtrarCategorias();
 
     if (!frases.length) frases.push('Nada ainda: a TV testa os canais a cada 6 horas.');
     $('resumo').replaceChildren(...frases.map((f) => {
@@ -173,7 +189,24 @@
     return li;
   }
 
+  // Busca sem acento nem maiusculas, so na pagina (nao pede nada a TV).
+  const semAcento = (t) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  function filtrarCategorias() {
+    const termo = semAcento($('filtroCategorias').value.trim());
+    for (const li of $('categorias').children) {
+      const caixa = li.querySelector('input');
+      li.hidden = !!termo && !!caixa && !semAcento(caixa.dataset.nome).includes(termo);
+    }
+  }
+  $('filtroCategorias').oninput = filtrarCategorias;
+
+  function contarEscondidas() {
+    const n = document.querySelectorAll('#categorias input:checked').length;
+    $('contaEscondidas').textContent = n === 1 ? '(1 escondida)' : '(' + n + ' escondidas)';
+  }
+
   async function salvarEscondidas() {
+    contarEscondidas();
     const marcadas = [...document.querySelectorAll('#categorias input:checked')].map((c) => c.dataset.nome);
     try {
       await pedir('PUT', '/escondidas', marcadas.join('\n'));

@@ -192,6 +192,10 @@ A tela carrega só os filmes e o índice das séries. Os episódios de uma séri
   - A comparação ignora maiúsculas e acentos e vale para a categoria inteira (`Escondidas`, `:core`, com testes).
   - O app filtra na leitura (grade, busca, "Continuar assistindo") e relê em até 1 min. Nada é baixado de novo.
   - A página recebe as categorias que o app já tem na memória (0.29). Ler os 30 mil filmes do disco levava 13 s, e a seção parecia vazia.
+  - A seção fica recolhida, com rolagem e um campo para procurar categoria. A procura roda só na página, sem acento nem maiúsculas.
+- **Filmes e séries não somem mais (0.29):** a leitura fica guardada no processo (`BibliotecaLida`), então fechar e abrir o app não relê os 30 mil filmes, o que levava de 15 a 30 s.
+  - Se a leitura falha (por exemplo, com o `TesteJob` trocando a pasta), fica a anterior e o app tenta de novo em 1 min. Antes, uma falha deixava tudo vazio até o dia seguinte.
+  - Enquanto lê, o menu mostra Filmes e Séries com "Carregando…".
 - **Job diário (ID 3):** não baixa a lista de novo se a biblioteca tem menos de 20 h. Antes, ele rodava logo depois do ID 4. Quando o Android interrompe um job, o registro passa a dizer "interrompida pelo Android"; antes aparecia o nome embaralhado pelo R8.
 
 **Ordem sugerida:**
