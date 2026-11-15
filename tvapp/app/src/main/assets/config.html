@@ -18,6 +18,8 @@
   li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; background: var(--cartao); border-radius: 8px; }
   li button { margin: 0; }
   .botoes { display: flex; gap: 6px; flex-shrink: 0; }
+  label.categoria { display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; }
+  label.categoria input { width: 22px; height: 22px; margin: 0; padding: 0; flex-shrink: 0; }
   .tipo { display: block; color: var(--cinza); font-size: 14px; }
   .dica, .msg { color: var(--cinza); font-size: 15px; }
   .msg { min-height: 1.4em; }
@@ -61,6 +63,11 @@
     <button id="enviar">Enviar</button>
     <button id="apagar" class="secundario">Apagar canais avulsos</button>
     <p id="msgAvulsos" class="msg" role="status"></p>
+
+    <h2>Categorias escondidas</h2>
+    <p class="dica">Marque as categorias de filmes e séries que <strong>não</strong> devem aparecer na TV. Vale em até 1 minuto, sem baixar nada de novo.</p>
+    <ul id="categorias"></ul>
+    <p id="msgCategorias" class="msg" role="status"></p>
 
     <h2>O que a TV fez</h2>
     <p class="dica">As últimas atualizações, a mais nova primeiro (horário da TV). Só aparece o nome do site, nunca a senha.</p>
@@ -127,6 +134,28 @@
     }
     const n = await pedir('GET', '/avulsos');
     $('avulsos').textContent = n === '0' ? 'Nenhum canal avulso na TV.' : 'A TV tem ' + n + ' canais avulsos (sem teste).';
+    const categorias = $('categorias');
+    categorias.replaceChildren();
+    const linhasCat = (await pedir('GET', '/categorias')).split('\n').filter(Boolean);
+    if (!linhasCat.length) {
+      const li = document.createElement('li');
+      li.textContent = 'Nenhum filme ou série ainda (aparecem depois que a TV baixa as suas listas).';
+      categorias.append(li);
+    }
+    for (const linha of linhasCat) {
+      const [nome, escondida] = linha.split('\t');
+      const li = document.createElement('li');
+      const rotulo = document.createElement('label');
+      rotulo.className = 'categoria';
+      const caixa = document.createElement('input');
+      caixa.type = 'checkbox';
+      caixa.checked = escondida === '1';
+      caixa.dataset.nome = nome;
+      caixa.onchange = salvarEscondidas;
+      rotulo.append(caixa, document.createTextNode(' ' + nome));
+      li.append(rotulo);
+      categorias.append(li);
+    }
     const resumo = $('resumo');
     resumo.replaceChildren();
     const frases = (await pedir('GET', '/resumo')).split('\n').filter(Boolean);
@@ -139,6 +168,14 @@
       resumo.append(li);
     }
     $('registro').textContent = await pedir('GET', '/registro');
+  }
+
+  async function salvarEscondidas() {
+    const marcadas = [...document.querySelectorAll('#categorias input:checked')].map((c) => c.dataset.nome);
+    try {
+      await pedir('PUT', '/escondidas', marcadas.join('\n'));
+      $('msgCategorias').textContent = marcadas.length ? 'Salvo. Escondidas: ' + marcadas.join(', ') + '.' : 'Salvo. Nenhuma categoria escondida.';
+    } catch (e) { $('msgCategorias').textContent = e.message; }
   }
 
   $('entrar').onclick = async () => {

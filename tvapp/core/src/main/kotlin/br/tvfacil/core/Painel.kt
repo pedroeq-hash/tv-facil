@@ -17,10 +17,14 @@ class Painel(
     private val registro: () -> String,
     avulsos: Int, // quantos canais avulsos a TV ja tem
     private val aoMudarAvulsos: (List<Canal>) -> Unit,
+    private val categorias: () -> List<String> = { emptyList() }, // de filmes e series (lidas so quando a pagina pede)
+    escondidas: List<String> = Escondidas.PADRAO,
+    private val aoMudarEscondidas: (List<String>) -> Unit = {},
     private val aoMudar: (List<Fonte>) -> Unit,
 ) {
     var fontes = fontes
         private set
+    private var escondidas = escondidas
     var avulsos = avulsos
         private set
     var pareado = false
@@ -65,6 +69,17 @@ class Painel(
                 val i = p.caminho.removePrefix("/listas/").toIntOrNull()
                 if (i == null || i !in fontes.indices) return texto(404, "lista nao encontrada")
                 mudar(fontes.filterIndexed { j, _ -> j != i })
+                texto(200, "ok")
+            }
+            // "categoria\t1" = escondida; inclui as escondidas que nao estao mais na lista (para poder mostrar de novo).
+            p.metodo == "GET" && p.caminho == "/categorias" -> {
+                val esconde = Escondidas.filtro(escondidas)
+                val todas = (categorias() + escondidas).distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+                texto(200, todas.joinToString("") { "$it\t${if (esconde(it)) 1 else 0}\n" })
+            }
+            p.metodo == "PUT" && p.caminho == "/escondidas" -> {
+                escondidas = Escondidas.ler(p.corpo)
+                aoMudarEscondidas(escondidas)
                 texto(200, "ok")
             }
             p.metodo == "GET" && p.caminho == "/registro" -> texto(200, registro())

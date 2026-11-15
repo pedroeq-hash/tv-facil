@@ -42,6 +42,12 @@ class ServidorConfig(private val context: Context) {
                 TesteJob.rodarAgora(context)
                 status = "Canais avulsos salvos. Aparecem em uns 5 minutos."
             },
+            categorias = { Arquivos.categorias(context) },
+            escondidas = Arquivos.lerEscondidas(context),
+            aoMudarEscondidas = { categorias ->
+                Arquivos.salvarEscondidas(context, categorias)
+                status = "Categorias escondidas salvas. A TV atualiza em até 1 minuto."
+            },
         ) { novas ->
             val enderecosAntes = TesteJob.lerFontes(context).map { it.url }
             TesteJob.salvarFontes(context, novas)

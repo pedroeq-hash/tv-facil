@@ -10,6 +10,7 @@ class PainelTest {
     private val endereco = "10.0.0.20:8765"
     private var salvas: List<Fonte>? = null
     private var avulsosSalvos: List<Canal>? = null
+    private var escondidasSalvas: List<String>? = null
     private val publica = Fonte("https://iptv-org.github.io/iptv/countries/br.m3u", false)
     private val painel = Painel(
         endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "<html>pagina</html>",
@@ -130,6 +131,21 @@ class PainelTest {
         val r = painel.responder(comToken("GET", "/resumo"))
         assertEquals(200, r.codigo)
         assertEquals("Próximo teste dos canais: por volta de 15/11 12:51.\n15/11 06:51 — Testando os canais agora…", r.corpo)
+    }
+
+    @Test
+    fun `categorias escondidas - mostra todas com a marca e salva a escolha, so com o token`() {
+        val p = Painel(
+            endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "", registro = { "" },
+            avulsos = 0, aoMudarAvulsos = {}, categorias = { listOf("NETFLIX", "BRASIL PARALELO") },
+            escondidas = Escondidas.PADRAO, aoMudarEscondidas = { escondidasSalvas = it },
+        ) {}
+        assertEquals(401, p.responder(pedido("GET", "/categorias")).codigo)
+        assertEquals(401, p.responder(pedido("PUT", "/escondidas", "NETFLIX")).codigo)
+        assertEquals("BRASIL PARALELO\t1\nNETFLIX\t0\n", p.responder(comToken("GET", "/categorias")).corpo)
+        assertEquals(200, p.responder(comToken("PUT", "/escondidas", "NETFLIX\n\u0007\n")).codigo)
+        assertEquals(listOf("NETFLIX"), escondidasSalvas)
+        assertEquals("BRASIL PARALELO\t0\nNETFLIX\t1\n", p.responder(comToken("GET", "/categorias")).corpo)
     }
 
     @Test

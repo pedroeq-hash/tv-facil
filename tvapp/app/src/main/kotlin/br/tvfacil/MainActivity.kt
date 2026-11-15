@@ -32,6 +32,7 @@ import br.tvfacil.core.Canal
 import br.tvfacil.core.Catalogo
 import br.tvfacil.core.Diagnostico
 import br.tvfacil.core.Efeito
+import br.tvfacil.core.Escondidas
 import br.tvfacil.core.EstadoVideo
 import br.tvfacil.core.Fase
 import br.tvfacil.core.Grupo
@@ -417,18 +418,21 @@ class MainActivity : ComponentActivity(), Acoes {
     }.filterNot { it.url in bloqueados }
 
     private var bibliotecaLidaEm = emptyList<Long>()
-    private fun marcaBiblioteca() = listOf(Arquivos.filmes(this).lastModified(), Arquivos.series(this).lastModified())
+    // Inclui as categorias escondidas: mudou na pagina, rele (em ate 1 min).
+    private fun marcaBiblioteca() =
+        listOf(Arquivos.filmes(this).lastModified(), Arquivos.series(this).lastModified(), Arquivos.escondidas(this).lastModified())
 
     // shortcut: le os 30 mil filmes de uma vez (~5 MB); se a memoria apertar, ler so os nomes e buscar o resto ao abrir.
     private suspend fun lerBiblioteca() {
         val (f, s) = withContext(Dispatchers.IO) {
             bibliotecaLidaEm = marcaBiblioteca()
+            val esconde = Escondidas.filtro(Arquivos.lerEscondidas(this@MainActivity)) // ex.: Brasil Paralelo
             val f = runCatching { Arquivos.filmes(this@MainActivity).useLines { M3uParser.ler(it).take(Biblioteca.MAX_FILMES).toList() } }
-                .getOrDefault(emptyList()).filterNot { it.url in bloqueados }
+                .getOrDefault(emptyList()).filterNot { it.url in bloqueados || esconde(it.grupo) }
             val s = runCatching {
                 val arquivo = Arquivos.series(this@MainActivity)
                 require(arquivo.length() <= 5_000_000) // o indice da lista do colega tem ~400 KB
-                Biblioteca.lerIndice(arquivo.readText()).take(Biblioteca.MAX_SERIES)
+                Biblioteca.lerIndice(arquivo.readText()).take(Biblioteca.MAX_SERIES).filterNot { esconde(it.categoria) }
             }.getOrDefault(emptyList())
             f to s
         }
