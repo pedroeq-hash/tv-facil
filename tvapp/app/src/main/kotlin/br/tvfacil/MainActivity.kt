@@ -433,16 +433,19 @@ class MainActivity : ComponentActivity(), Acoes {
             return listOf(doApp, File(Environment.getExternalStorageDirectory(), "iptv/canais_ok.m3u")).maxBy { it.lastModified() }
         }
     private var listaLidaEm = 0L // data do arquivo lido: o Termux regrava a lista a cada 6 h
+    private var escondidasLidaEm = 0L // categorias escondidas valem tambem para os grupos de canais (ex.: adultos)
     private var bloqueados = emptySet<String>()
 
     private suspend fun lerLista(): List<Canal> = withContext(Dispatchers.IO) {
         val arquivo = arquivoLista
         listaLidaEm = arquivo.lastModified()
+        escondidasLidaEm = Arquivos.escondidas(this@MainActivity).lastModified()
+        val esconde = Escondidas.filtro(Arquivos.lerEscondidas(this@MainActivity))
         // shortcut: lista acima de 5 MB (a normal tem ~50 KB) nao e lida e aparece "nao encontrada"; avisar melhor se acontecer.
         runCatching {
             require(arquivo.length() <= 5_000_000)
             M3uParser.parse(arquivo.readText())
-        }.getOrDefault(emptyList())
+        }.getOrDefault(emptyList()).filterNot { esconde(Catalogo.grupoDe(it)) }
     }.filterNot { it.url in bloqueados }
 
     private var bibliotecaLidaEm = emptyList<Long>()
@@ -516,7 +519,8 @@ class MainActivity : ComponentActivity(), Acoes {
     }
 
     private fun relerSeMudou() {
-        if (canais != null && arquivoLista.lastModified() != listaLidaEm) lifecycleScope.launch {
+        val mudou = arquivoLista.lastModified() != listaLidaEm || Arquivos.escondidas(this).lastModified() != escondidasLidaEm
+        if (canais != null && mudou) lifecycleScope.launch {
             canais = lerLista()
             atualizarBusca()
         }

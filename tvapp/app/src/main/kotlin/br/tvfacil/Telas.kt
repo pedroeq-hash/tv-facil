@@ -203,7 +203,9 @@ fun Tela(
             Camada.BUSCA -> BuscaCanais(indiceCanais, vod.indiceSeries, vod.indiceFilmes, termo, canal, acoes)
             Camada.GRADE -> GradeCanais("Todos os canais", grupos, grupoAtual, canal) { c, g -> acoes.escolher(c, g) }
             // Categorias que o app ja tem na memoria (as escondidas o Painel acrescenta): ler os 30 mil filmes do disco levava 13 s.
-            Camada.CONFIGURAR -> Configurar((vod.gruposFilmes + vod.gruposSeries).map { it.nome }.filter { it != CONTINUAR })
+            Camada.CONFIGURAR -> Configurar(
+                (grupos + vod.gruposFilmes + vod.gruposSeries).map { it.nome }.filter { it != CONTINUAR && it != Catalogo.FAVORITOS },
+            )
             Camada.FILMES, Camada.SERIES -> if (vod.carregando && vod.gruposFilmes.isEmpty() && vod.gruposSeries.isEmpty()) {
                 Aviso("Carregando filmes e séries…\n\nAparecem sozinhos em alguns segundos.")
             } else if (camada == Camada.FILMES) GradeCanais(
