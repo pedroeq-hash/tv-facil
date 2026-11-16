@@ -53,14 +53,14 @@ object Biblioteca {
     // Limites de disco e memoria (docs/plano-tvapp.md, "Filmes e series de lista propria").
     const val MAX_FILMES = 60_000
     const val MAX_SERIES = 20_000
-    const val MAX_EPISODIOS = 5_000 // por serie; a maior da lista do colega tem 1.081
+    const val MAX_EPISODIOS = 5_000 // por serie; a maior numa lista de teste tinha 1.081
     const val MAX_AO_VIVO = 5_000
 
     private val extensaoVod = Regex("""\.(mp4|mkv|avi|mov|m4v|webm)$""", RegexOption.IGNORE_CASE)
     private val numeracao = Regex("""^(.*?)[\s._-]*\bS(\d{1,3})\s*E(\d{1,4})\b""", RegexOption.IGNORE_CASE)
     private val prefixo = Regex("""^\s*(filmes?|s[eéEÉ]ries?|vod|movies?)\s*\|\s*""", RegexOption.IGNORE_CASE)
 
-    /** "FILMES | Drama" -> "Drama"; "SÉRIES | NETFLIX" -> "NETFLIX". */
+    /** "FILMES | Drama" -> "Drama"; "SÉRIES | Comédia" -> "Comédia". */
     fun categoria(grupo: String) = grupo.replace(prefixo, "").trim().ifEmpty { "Outros" }
 
     fun classificar(c: Canal): Item {

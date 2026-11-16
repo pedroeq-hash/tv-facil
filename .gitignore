@@ -22,3 +22,6 @@ keystore.properties
 .idea/
 .vscode/
 *.iml
+
+# Instrucoes locais do Claude Code (pessoais)
+CLAUDE.md

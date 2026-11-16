@@ -113,9 +113,9 @@ class M3uParserTest {
     @Test
     fun `tira caracteres invisiveis e de inversao de texto do nome, grupo e opcoes`() {
         val canal = M3uParser.parse(
-            "#EXTINF:-1 group-title=\"Not​ícias\u0007\",CNN‮ Brasil\u0000\n" +
+            "#EXTINF:-1 group-title=\"Not\u200Bícias\u0007\",CNN\u202E Brasil\u0000\n" +
                 "#EXTVLCOPT:http-user-agent=Mozilla\u0001/5.0\n" +
-                "#EXTVLCOPT:http-referrer=https://exemplo.com/⁦\n" +
+                "#EXTVLCOPT:http-referrer=https://exemplo.com/\u2066\n" +
                 "https://exemplo.com/cnn.m3u8"
         ).single()
         assertEquals("CNN Brasil", canal.nome)
@@ -164,7 +164,7 @@ class M3uParserTest {
         assertEquals("Discovery", nome("Discovery HD"))
         assertEquals("Cine Ação", nome("Cine Ação FHD H265"))
         assertEquals("Esporte", nome("Esporte (1080p60)"))
-        assertEquals("Titanic (1997)", nome("Titanic (1997)"))
+        assertEquals("Nosferatu (1922)", nome("Nosferatu (1922)"))
         assertEquals("HDTV Notícias", nome("HDTV Notícias")) // HD dentro da palavra fica
         assertEquals("4K", nome("4K")) // so marcas: fica como estava
         // [L] legendado, [DUB] dublado: separam versoes da mesma serie/filme, ficam

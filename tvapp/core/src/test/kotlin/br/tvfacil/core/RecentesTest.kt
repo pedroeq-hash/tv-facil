@@ -33,9 +33,9 @@ class RecentesTest {
 
     @Test
     fun `texto - le e escreve, e linha antiga sem hora conta a partir de agora`() {
-        val lista = listOf(Recente("serie:X|Dark", 5), Recente("serie:Y|Lost", 7))
+        val lista = listOf(Recente("serie:X|Aurora", 5), Recente("serie:Y|Farol", 7))
         assertEquals(lista, Recentes.ler(Recentes.escrever(lista), agora))
-        assertEquals(listOf(Recente("serie:X|Dark", agora)), Recentes.ler("serie:X|Dark\n\n", agora))
+        assertEquals(listOf(Recente("serie:X|Aurora", agora)), Recentes.ler("serie:X|Aurora\n\n", agora))
     }
 
     @Test

@@ -12,7 +12,7 @@ class PainelTest {
     private var avulsosSalvos: List<Canal>? = null
     private var escondidasSalvas: List<String>? = null
     private val publica = Fonte("https://iptv-org.github.io/iptv/countries/br.m3u", false)
-    // Dois avulsos que a TV ja tem, com usuario e senha no link (como nas listas pagas).
+    // Dois avulsos que a TV ja tem, com usuario e senha no link (como nas listas privadas, com login).
     private val avulsosIniciais = listOf(
         Canal("Canal A", "http://srv.com:8080/joao/segredo/a", "Globo"),
         Canal("Filme B", "http://srv.com/movie/joao/segredo/b.mp4", "Meus filmes", tipo = Tipo.FILME),
@@ -22,7 +22,7 @@ class PainelTest {
         registro = { "2026-11-15 06:51:00 inicio da rodada\n  falhou: x.com - HTTP 404" }, avulsos = avulsosIniciais, aoMudarAvulsos = { avulsosSalvos = it },
     ) { salvas = it }
 
-    // Arquivo .m3u com n canais; por padrao com usuario e senha no link, como nas listas pagas.
+    // Arquivo .m3u com n canais; por padrao com usuario e senha no link, como nas listas privadas, com login.
     private fun m3u(n: Int, url: (Int) -> String = { "http://srv.com:8080/joao/segredo/$it" }) =
         "#EXTM3U\n" + (1..n).joinToString("") { "#EXTINF:-1 group-title=\"Globo\",Canal $it\n${url(it)}\n" }
 
@@ -129,8 +129,8 @@ class PainelTest {
     fun `um canal ou filme por vez, com categoria padrao`() {
         assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "canal\nGlobo SE\nhttps://x.com/globo.m3u8\n")).codigo)
         assertEquals(Canal("Globo SE", "https://x.com/globo.m3u8", "Meus canais"), avulsosSalvos!!.last())
-        assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "filme\nTitanic (1997)\nhttps://x.com/t.mp4\nDra\"ma")).codigo)
-        assertEquals(Canal("Titanic (1997)", "https://x.com/t.mp4", "Drama", tipo = Tipo.FILME), avulsosSalvos!!.last())
+        assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "filme\nNosferatu (1922)\nhttps://x.com/t.mp4\nDra\"ma")).codigo)
+        assertEquals(Canal("Nosferatu (1922)", "https://x.com/t.mp4", "Drama", tipo = Tipo.FILME), avulsosSalvos!!.last())
         assertEquals(200, painel.responder(comToken("POST", "/avulsos/um", "filme\nOutro\nhttps://x.com/o.mp4\n")).codigo)
         assertEquals("Meus filmes", avulsosSalvos!!.last().grupo)
     }
@@ -208,15 +208,15 @@ class PainelTest {
     fun `categorias escondidas - mostra todas com a marca e salva a escolha, so com o token`() {
         val p = Painel(
             endereco, pin = "123456", token = "tok", fontes = listOf(publica), pagina = "", registro = { "" },
-            avulsos = emptyList(), aoMudarAvulsos = {}, categorias = { listOf("NETFLIX", "BRASIL PARALELO") },
-            escondidas = Escondidas.PADRAO, aoMudarEscondidas = { escondidasSalvas = it },
+            avulsos = emptyList(), aoMudarAvulsos = {}, categorias = { listOf("COMÉDIA", "ADULTOS") },
+            escondidas = listOf("ADULTOS"), aoMudarEscondidas = { escondidasSalvas = it },
         ) {}
         assertEquals(401, p.responder(pedido("GET", "/categorias")).codigo)
-        assertEquals(401, p.responder(pedido("PUT", "/escondidas", "NETFLIX")).codigo)
-        assertEquals("BRASIL PARALELO\t1\nNETFLIX\t0\n", p.responder(comToken("GET", "/categorias")).corpo)
-        assertEquals(200, p.responder(comToken("PUT", "/escondidas", "NETFLIX\n\u0007\n")).codigo)
-        assertEquals(listOf("NETFLIX"), escondidasSalvas)
-        assertEquals("BRASIL PARALELO\t0\nNETFLIX\t1\n", p.responder(comToken("GET", "/categorias")).corpo)
+        assertEquals(401, p.responder(pedido("PUT", "/escondidas", "COMÉDIA")).codigo)
+        assertEquals("ADULTOS\t1\nCOMÉDIA\t0\n", p.responder(comToken("GET", "/categorias")).corpo)
+        assertEquals(200, p.responder(comToken("PUT", "/escondidas", "COMÉDIA\n\u0007\n")).codigo)
+        assertEquals(listOf("COMÉDIA"), escondidasSalvas)
+        assertEquals("ADULTOS\t0\nCOMÉDIA\t1\n", p.responder(comToken("GET", "/categorias")).corpo)
     }
 
     @Test

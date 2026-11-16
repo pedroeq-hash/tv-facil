@@ -38,7 +38,7 @@ object BibliotecaLida {
 
     /** Lanca excecao se nao der para ler agora: quem chama mantem a leitura anterior e tenta de novo depois. */
     fun ler(c: Context, marca: List<Long>): Lida {
-        val esconde = Escondidas.filtro(Arquivos.lerEscondidas(c)) // ex.: Brasil Paralelo
+        val esconde = Escondidas.filtro(Arquivos.lerEscondidas(c)) // ex.: canais adultos (controle dos pais)
         // Filmes avulsos (pagina: "um por vez" ou arquivo); os canais ao vivo avulsos vao para a lista de canais (TesteJob).
         val avulsos = TesteJob.lerAvulsos(c).mapNotNull { a ->
             when (val item = Biblioteca.classificar(a)) {
@@ -55,7 +55,7 @@ object BibliotecaLida {
             arquivoFilmes.useLines { M3uParser.ler(it).take(Biblioteca.MAX_FILMES).filterNot { f -> esconde(f.grupo) }.toList() }
         val arquivoSeries = Arquivos.series(c)
         val s = if (!arquivoSeries.exists()) emptyList() else {
-            require(arquivoSeries.length() <= 5_000_000) // o indice da lista do colega tem ~400 KB
+            require(arquivoSeries.length() <= 5_000_000) // uma lista de teste com 8 mil series da ~400 KB
             Biblioteca.lerIndice(arquivoSeries.readText()).take(Biblioteca.MAX_SERIES).filterNot { esconde(it.categoria) }
         }
         val todos = avulsos + f

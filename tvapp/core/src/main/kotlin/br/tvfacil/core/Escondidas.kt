@@ -4,10 +4,10 @@ import java.text.Normalizer
 
 /**
  * Categorias de filmes e series que nao aparecem na TV (escolhidas na pagina de configuracao).
- * Arquivo privado, uma por linha. Sem arquivo = PADRAO; arquivo vazio = nada escondido.
+ * Arquivo privado, uma por linha. Sem arquivo ou arquivo vazio = nada escondido.
  */
 object Escondidas {
-    val PADRAO = listOf("BRASIL PARALELO")
+    val PADRAO = emptyList<String>()
     private const val MAX = 200
     private val ACENTO = Regex("\\p{M}")
 

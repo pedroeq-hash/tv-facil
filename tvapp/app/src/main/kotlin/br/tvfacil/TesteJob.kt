@@ -78,7 +78,7 @@ class TesteJob : JobService() {
         private const val ID_PROPRIAS_AGORA = 4 // listas mudaram pela pagina
         private const val SEIS_HORAS = 6 * 60 * 60 * 1000L
         private const val UM_DIA = 24 * 60 * 60 * 1000L
-        private const val MAX_LISTA_PROPRIA = 200_000_000 // a do colega tem 85 MB
+        private const val MAX_LISTA_PROPRIA = 200_000_000 // a maior lista de teste tinha 85 MB
         private const val PARALELO = 4 // como o PARALELO=4 do Termux: nao atrapalha quem assiste
 
         fun agendar(context: Context) {
@@ -181,7 +181,7 @@ class TesteJob : JobService() {
                     emptyList()
                 }
             }
-            // Listas proprias entram sem teste: lista paga limita conexoes, e testar centenas de canais pode bloquear a conta.
+            // Listas proprias entram sem teste: lista privada (com login) costuma limitar conexoes, e testar centenas de canais pode bloquear a conta.
             // Avulsos primeiro (como o extras.m3u do Termux), depois as listas proprias baixadas.
             // So os canais ao vivo: filmes avulsos vao para Filmes (BibliotecaLida).
             val avulsos = lerAvulsos(context).filter { Biblioteca.classificar(it) is Item.AoVivo }
@@ -213,7 +213,7 @@ class TesteJob : JobService() {
 
         /**
          * Filmes, series e canais ao vivo das listas proprias (docs/plano-tvapp.md, "Filmes e series de lista propria").
-         * Baixa direto para arquivo e le aos pedacos: a lista do colega tem 85 MB e 316 mil itens, nao cabe na memoria.
+         * Baixa direto para arquivo e le aos pedacos: uma lista grande de teste tinha 85 MB e 316 mil itens, nao cabe na memoria.
          * Monta tudo em biblioteca.novo/ e troca no fim; se uma lista falhar, fica a biblioteca anterior inteira.
          */
         private suspend fun atualizarProprias(context: Context, sempreTestar: Boolean) = trava.withLock {

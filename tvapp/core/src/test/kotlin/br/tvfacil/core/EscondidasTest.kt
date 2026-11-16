@@ -7,18 +7,17 @@ import kotlin.test.assertTrue
 
 class EscondidasTest {
     @Test
-    fun `sem arquivo, Brasil Paralelo ja vem escondida`() {
-        val esconde = Escondidas.filtro(Escondidas.ler(null))
-        assertTrue(esconde("BRASIL PARALELO"))
-        assertFalse(esconde("NETFLIX"))
+    fun `sem arquivo, nada escondido`() {
+        assertEquals(emptyList(), Escondidas.ler(null))
     }
 
     @Test
     fun `compara sem maiusculas nem acento`() {
-        val esconde = Escondidas.filtro(listOf("Séries Antigas", "Brasil Paralelo"))
+        val esconde = Escondidas.filtro(listOf("Séries Antigas", "Adultos"))
         assertTrue(esconde("SERIES ANTIGAS"))
-        assertTrue(esconde("BRASIL PARALELO"))
-        assertFalse(esconde("Brasil")) // so a categoria inteira
+        assertTrue(esconde("ADULTOS"))
+        assertFalse(esconde("Séries")) // so a categoria inteira
+        assertFalse(esconde("Comédia"))
     }
 
     @Test

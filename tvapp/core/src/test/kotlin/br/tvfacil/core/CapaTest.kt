@@ -14,7 +14,7 @@ class CapaTest {
 
     @Test
     fun `capa de outro site fica como veio`() {
-        assertEquals("https://cdn.exemplo.com/capas/titanic.jpg", Capa.endereco("https://cdn.exemplo.com/capas/titanic.jpg"))
+        assertEquals("https://cdn.exemplo.com/capas/nosferatu.jpg", Capa.endereco("https://cdn.exemplo.com/capas/nosferatu.jpg"))
     }
 
     @Test

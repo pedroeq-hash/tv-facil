@@ -26,10 +26,10 @@ class BuscaTest {
 
     @Test
     fun `indice pronto da o mesmo resultado e corta no maximo`() {
-        val lista = canais("Rede Globo", "GloboNews", "Globoplay Novelas")
+        val lista = canais("Rede Globo", "GloboNews", "Globo Rural")
         val indice = Busca.indice(lista)
         assertEquals(nomes(Busca.filtrar(lista, "globo")), nomes(Busca.filtrar(indice, "globo")))
-        assertEquals(listOf("GloboNews", "Globoplay Novelas"), nomes(Busca.filtrar(indice, "globo", max = 2)))
+        assertEquals(listOf("GloboNews", "Globo Rural"), nomes(Busca.filtrar(indice, "globo", max = 2)))
     }
 
     @Test
@@ -40,7 +40,7 @@ class BuscaTest {
     @Test
     fun `busca global - canais, series e filmes, com cota de cada tipo`() {
         val canais = Busca.indice(canais("Rede Globo", "Record"))
-        val series = Busca.indice(listOf(Canal("Globo Repórter", "1", tipo = Tipo.SERIE), Canal("Dark", "2", tipo = Tipo.SERIE)))
+        val series = Busca.indice(listOf(Canal("Globo Repórter", "1", tipo = Tipo.SERIE), Canal("Aurora", "2", tipo = Tipo.SERIE)))
         val filmes = Busca.indice((1..50).map { Canal("Globo $it", "https://f.com/$it.mp4", tipo = Tipo.FILME) })
         val r = Busca.global(canais, series, filmes, "globo", cota = 3)
         assertEquals(listOf("Rede Globo", "Globo Repórter", "Globo 1", "Globo 2", "Globo 3"), nomes(r))

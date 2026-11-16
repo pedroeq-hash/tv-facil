@@ -40,7 +40,7 @@ class CatalogoTest {
     @Test
     fun `sigla - uma palavra vira as duas primeiras letras`() {
         assertEquals("SB", Catalogo.sigla("SBT"))
-        assertEquals("GL", Catalogo.sigla("globoplay"))
+        assertEquals("GL", Catalogo.sigla("globonews"))
     }
 
     @Test
