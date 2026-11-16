@@ -18,6 +18,16 @@ O TV Fácil lê listas M3U e mostra os canais em grupos, com letras grandes, pou
 
 <sub>Telas ilustrativas com dados de exemplo: canais públicos e filmes de domínio público. Elas reproduzem as cores, a fonte e as medidas do app.</sub>
 
+## De onde veio
+
+Um amigo comprou um stick Android TV barato para a mãe dele, que tem pouca familiaridade (e pouca paciência) com tecnologia. Ele queria canais abertos e alguns filmes gratuitos, sem complicação. O plano inicial era só um "detox" do aparelho:
+
+1. **Revisão do aparelho** pelo ADB, atrás de qualquer app estranho. Apareceu um AnyDesk (acesso remoto) instalado sem o conhecimento do dono, que foi desativado. Tudo sem root: apps só desativados, com backup antes e cada mudança registrada com o comando para desfazer.
+2. **Tela inicial mais limpa**, trocando o launcher padrão.
+3. **Players prontos de IPTV**, testados e descartados: todos tinham configurações complexas demais para quem só quer ligar a TV e assistir.
+
+Então veio o app próprio. Primeiro, um script em Bash no Termux testava os canais a cada 6 h (está em [`pipeline/`](pipeline/)); na versão 0.22 esse teste passou para dentro do app.
+
 ## Conteúdo
 
 O TV Fácil é **só o player**: ele não traz nem vende conteúdo. As únicas listas que vêm configuradas são as públicas do [iptv-org](https://github.com/iptv-org/iptv) e do [Free-TV](https://github.com/Free-TV/IPTV), com canais abertos e gratuitos. Quem usa pode acrescentar outras listas M3U a que tenha direito de acesso. O uso deve respeitar os direitos e as licenças de cada conteúdo.
