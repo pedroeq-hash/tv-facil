@@ -20,7 +20,7 @@ O TV Fácil lê listas M3U e mostra os canais em grupos, com letras grandes, pou
 
 ## De onde veio
 
-Um amigo comprou um stick Android TV barato para a mãe dele, que tem pouca familiaridade (e pouca paciência) com tecnologia. Ele queria canais abertos e alguns filmes gratuitos, sem complicação. O plano inicial era só um "detox" do aparelho:
+Um amigo comprou um stick Android TV barato para uma pessoa da família, que tem pouca familiaridade (e pouca paciência) com tecnologia. Ele queria canais abertos e alguns filmes gratuitos, sem complicação. O plano inicial era só um "detox" do aparelho:
 
 1. **Revisão do aparelho** pelo ADB, atrás de qualquer app estranho. Apareceu um AnyDesk (acesso remoto) instalado sem o conhecimento do dono, que foi desativado. Tudo sem root: apps só desativados, com backup antes e cada mudança registrada com o comando para desfazer.
 2. **Tela inicial mais limpa**, trocando o launcher padrão.
